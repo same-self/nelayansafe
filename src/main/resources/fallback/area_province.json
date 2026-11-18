@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "province": "Aceh",
+      "areas": [
+        { "id": "P.A.05", "name": "Perairan Aceh Besar - Meulaboh" }
+      ]
+    },
+    {
+      "province": "Sulawesi Selatan",
+      "areas": [
+        { "id": "P.AE.09", "name": "Perairan Sinjai" }
+      ]
+    }
+  ]
+}

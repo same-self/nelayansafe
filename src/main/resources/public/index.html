@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NelayanSafe — Maritime Sailing Safety &amp; Clearance System</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-icon">⚓</div>
+      <div>
+        <h1>NelayanSafe</h1>
+        <p>Vessel-Specific Maritime Sailing Safety, Departure Optimizer &amp; Clearance System</p>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <span id="connectionBadge" class="badge badge-neutral">Connecting to BMKG...</span>
+      <label class="toggle-pill" title="Simulate Nov 2026 Natuna high-wave storm (1.85-2.45m, 17-22kt) for testing">
+        <input type="checkbox" id="simulateStormToggle" />
+        <span>Storm Simulation</span>
+      </label>
+      <button id="refreshBtn" class="btn btn-secondary">↻ Refresh Live BMKG</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Persistent Vessel & Crew Setup Bar -->
+    <section class="card vessel-panel">
+      <div class="section-header">
+        <div>
+          <h2>1. Vessel &amp; Safety Gear Profile</h2>
+          <p class="subtitle">Evaluates live BMKG forecasts polymorphically using official vessel-class safety limits</p>
+        </div>
+        <div class="preset-bar">
+          <span class="preset-label">Quick Demo Scenarios:</span>
+          <button type="button" class="btn-chip" data-preset="safe">✓ Safe Fishing Boat</button>
+          <button type="button" class="btn-chip" data-preset="overcapacity">⚠ Overcapacity Test</button>
+          <button type="button" class="btn-chip" data-preset="missingGear">⚠ Missing Gear Test</button>
+          <button type="button" class="btn-chip" data-preset="storm">⛔ Natuna Storm Test</button>
+        </div>
+      </div>
+
+      <div class="vessel-grid">
+        <div class="field">
+          <label for="vesselType">Vessel Class</label>
+          <select id="vesselType">
+            <option value="SmallFishingBoat">Small Fishing Boat (&gt;15 kt / &gt;1.25 m)</option>
+            <option value="BargeVessel">Barge Vessel (&gt;16 kt / &gt;1.50 m)</option>
+            <option value="PassengerFerry">Passenger Ferry (&gt;21 kt / &gt;2.50 m)</option>
+            <option value="CargoShip">Cargo / Cruise Ship (&gt;27 kt / &gt;4.00 m)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="vesselName">Vessel Name</label>
+          <input type="text" id="vesselName" value="KM Nelayan Sejahtera" />
+        </div>
+        <div class="field">
+          <label for="vesselId">Vessel ID</label>
+          <input type="text" id="vesselId" value="VSL-001" />
+        </div>
+        <div class="field">
+          <label for="maxCrew">Max Crew Capacity</label>
+          <input type="number" id="maxCrew" min="1" value="6" />
+        </div>
+        <div class="field">
+          <label for="crewCount">Crew Onboard</label>
+          <input type="number" id="crewCount" min="1" value="4" />
+        </div>
+        <div class="field gear-checks">
+          <label>Mandatory Safety Gear</label>
+          <div class="check-row">
+            <label><input type="checkbox" id="hasLifeJackets" checked /> Life Jackets</label>
+            <label><input type="checkbox" id="hasWorkingRadio" checked /> Marine Radio</label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="zoneTab">Live Zone &amp; 24h Window</button>
+      <button class="tab-btn" data-tab="routeTab">Multi-Zone Route Checker</button>
+      <button class="tab-btn" data-tab="clearanceTab">Harbor Clearance &amp; Logs</button>
+      <button class="tab-btn" data-tab="rulesTab">BMKG Rules &amp; OOP Reference</button>
+    </nav>
+
+    <!-- TAB 1: Live Zone & 24h Departure Optimizer -->
+    <section id="zoneTab" class="tab-content active">
+      <div class="card">
+        <div class="zone-selector-row">
+          <div class="field">
+            <label for="provinceSelect">Province</label>
+            <select id="provinceSelect"></select>
+          </div>
+          <div class="field grow">
+            <label for="zoneSelect">BMKG Sea Zone (Perairan)</label>
+            <select id="zoneSelect"></select>
+          </div>
+          <div class="field align-end">
+            <button id="evaluateZoneBtn" class="btn btn-primary">Evaluate Sea Safety</button>
+          </div>
+        </div>
+
+        <div id="zoneVerdictBanner" class="verdict-banner verdict-neutral">
+          <div>
+            <span id="verdictBadge" class="status-pill">LOADING</span>
+            <h3 id="verdictTitle">Select a sea zone and evaluate safety</h3>
+            <p id="verdictMeta" class="muted"></p>
+          </div>
+          <div class="risk-box">
+            <span class="risk-label">Risk Score</span>
+            <strong id="verdictScore">--</strong><small>/100</small>
+          </div>
+        </div>
+
+        <ul id="verdictReasons" class="reason-list"></ul>
+
+        <div class="metrics-grid" id="metricsGrid"></div>
+      </div>
+
+      <div class="card">
+        <div class="section-header">
+          <div>
+            <h2>24-Hour Safest Departure Window Optimizer</h2>
+            <p class="subtitle">Scans BMKG <code>forecast_day1</code> hourly slots to find calmest sailing hours in WIB (UTC+7). Click any hour bar to inspect.</p>
+          </div>
+        </div>
+        <div id="windowRecommendationBox" class="callout callout-info">Loading 24-hour forecast...</div>
+        <div id="hourlyChart" class="hourly-chart"></div>
+        <div id="hourlyInspector" class="hourly-inspector muted">Click any hour column above to inspect exact hourly wind, wave, gust, and current metrics.</div>
+      </div>
+    </section>
+
+    <!-- TAB 2: Multi-Zone Route Checker -->
+    <section id="routeTab" class="tab-content">
+      <div class="card">
+        <div class="section-header">
+          <div>
+            <h2>Multi-Zone Route Safety Analyzer</h2>
+            <p class="subtitle">Add 2–5 sea zones along your planned voyage. System identifies the highest-risk bottleneck zone.</p>
+          </div>
+          <button id="addRouteZoneBtn" class="btn btn-secondary">+ Add Selected Zone</button>
+        </div>
+
+        <div class="route-builder">
+          <div class="field grow">
+            <label for="routeZoneAdder">Pick Sea Zone to Add to Route</label>
+            <select id="routeZoneAdder"></select>
+          </div>
+          <button id="analyzeRouteBtn" class="btn btn-primary">Analyze Multi-Zone Route</button>
+        </div>
+
+        <div id="routeZoneChips" class="route-chips"></div>
+        <div id="routeSummaryBox" class="verdict-banner verdict-neutral hidden">
+          <div>
+            <span id="routeStatusPill" class="status-pill">--</span>
+            <h3 id="routeSummaryText">--</h3>
+            <p id="routeBottleneckMeta" class="muted"></p>
+          </div>
+          <div class="risk-box">
+            <span class="risk-label">Peak Risk</span>
+            <strong id="routePeakScore">--</strong><small>/100</small>
+          </div>
+        </div>
+        <div id="routeSegmentsGrid" class="route-segments"></div>
+      </div>
+    </section>
+
+    <!-- TAB 3: Harbor Clearance Gate & Trip Log -->
+    <section id="clearanceTab" class="tab-content">
+      <div class="card">
+        <div class="section-header">
+          <div>
+            <h2>Departure Clearance Gate (Syahbandar Guardrails)</h2>
+            <p class="subtitle">Enforces crew capacity, mandatory safety gear, and BMKG weather gate via Java Custom Exceptions</p>
+          </div>
+        </div>
+
+        <div class="clearance-summary">
+          <p><strong>Active Vessel:</strong> <span id="clrVesselSummary">-</span></p>
+          <p><strong>Target Route Zones:</strong> <span id="clrRouteSummary">-</span></p>
+          <p><strong>Recommended Window:</strong> <span id="clrWindowSummary">-</span></p>
+        </div>
+
+        <label class="caution-ack">
+          <input type="checkbox" id="cautionAckCheckbox" />
+          <span><strong>Captain Acknowledgment:</strong> If sea status is <code>CAUTION</code>, I confirm crew briefing and extra safety vigilance.</span>
+        </label>
+
+        <div class="clearance-actions">
+          <button id="requestClearanceBtn" class="btn btn-primary">Request Sailing Clearance</button>
+        </div>
+
+        <div id="clearanceResultBox" class="hidden"></div>
+      </div>
+
+      <div class="card">
+        <div class="section-header">
+          <div>
+            <h2>Issued Sailing Clearances Log</h2>
+            <p class="subtitle">Saved persistently on server to <code>data/clearances.json</code> &amp; <code>data/clearances.csv</code></p>
+          </div>
+          <a href="/api/clearances/export" class="btn btn-secondary">⬇ Download CSV Log</a>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Clearance ID</th>
+                <th>Issued (WIB)</th>
+                <th>Vessel</th>
+                <th>Crew</th>
+                <th>Route Zones</th>
+                <th>Risk</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="clearanceLogBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: Official BMKG Rules & OOP Architecture -->
+    <section id="rulesTab" class="tab-content">
+      <div class="card">
+        <h2>Official BMKG Vessel Sailing Safety Thresholds</h2>
+        <p class="subtitle">Zero arbitrary formulas: every threshold is mapped directly to BMKG Marine Meteorology guidelines.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Java Vessel Subclass</th>
+                <th>BMKG Vessel Class</th>
+                <th>Risky Wind Limit</th>
+                <th>Risky Wave Limit</th>
+                <th>Polymorphic Caution Factors</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>SmallFishingBoat</code></td>
+                <td>Perahu Nelayan</td>
+                <td>&gt; 15 knots</td>
+                <td>&gt; 1.25 m</td>
+                <td>&ge;80% limit, gusts &gt;1.3x wind limit, surface current &ge;1.5 kt</td>
+              </tr>
+              <tr>
+                <td><code>BargeVessel</code></td>
+                <td>Kapal Tongkang</td>
+                <td>&gt; 16 knots</td>
+                <td>&gt; 1.50 m</td>
+                <td>&ge;80% limit, cross-gusts &gt;1.35x limit, current &ge;2.0 kt</td>
+              </tr>
+              <tr>
+                <td><code>PassengerFerry</code></td>
+                <td>Kapal Ferry</td>
+                <td>&gt; 21 knots</td>
+                <td>&gt; 2.50 m</td>
+                <td>&ge;80% limit, gusts &ge;27 kt (passenger stability margin)</td>
+              </tr>
+              <tr>
+                <td><code>CargoShip</code></td>
+                <td>Kapal Kargo / Pesiar</td>
+                <td>&gt; 27 knots</td>
+                <td>&gt; 4.00 m</td>
+                <td>&ge;80% limit, gale gusts &ge;35 kt</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span><strong>NelayanSafe</strong> — Advanced Programming (Java OOP) Maritime Safety System</span>
+    <span>Data Source: <strong>BMKG</strong> (<a href="https://maritim.bmkg.go.id" target="_blank" rel="noopener">maritim.bmkg.go.id</a>)</span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+target/
+cache/
+data/
+dependency-reduced-pom.xml
+.idea/
+*.iml
