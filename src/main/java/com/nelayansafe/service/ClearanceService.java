@@ -25,17 +25,24 @@ import java.util.List;
 public class ClearanceService {
     private static final DateTimeFormatter ID_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
-    private final Path dataDir = Path.of("data");
-    private final Path jsonFile = dataDir.resolve("clearances.json");
-    private final Path csvFile = dataDir.resolve("clearances.csv");
+    private final Path dataDir;
+    private final Path jsonFile;
+    private final Path csvFile;
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
     private final List<SailingClearance> logs = new ArrayList<>();
 
     public ClearanceService() {
+        this(Path.of("data"));
+    }
+
+    public ClearanceService(Path dataDir) {
+        this.dataDir = dataDir != null ? dataDir : Path.of("data");
+        this.jsonFile = this.dataDir.resolve("clearances.json");
+        this.csvFile = this.dataDir.resolve("clearances.csv");
         try {
-            Files.createDirectories(dataDir);
-            if (Files.exists(jsonFile)) {
-                String json = Files.readString(jsonFile, StandardCharsets.UTF_8);
+            Files.createDirectories(this.dataDir);
+            if (Files.exists(this.jsonFile)) {
+                String json = Files.readString(this.jsonFile, StandardCharsets.UTF_8);
                 Type listType = new TypeToken<List<SailingClearance>>() {}.getType();
                 List<SailingClearance> loaded = gson.fromJson(json, listType);
                 if (loaded != null) {
