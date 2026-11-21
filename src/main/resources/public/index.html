@@ -217,12 +217,20 @@
         <div class="section-header">
           <div>
             <h2>24-Hour Safest Departure Window Optimizer</h2>
-            <p class="subtitle">Scans BMKG <code>forecast_day1</code> hourly slots to find the calmest sailing hours in local Indonesian time. Click any hour bar to inspect.</p>
+            <p class="subtitle">Scans BMKG <code>forecast_day1</code> hourly slots to find the calmest sailing hours in local Indonesian time. Click any hour column to inspect.</p>
           </div>
+          <span id="chartTimezoneBadge" class="badge badge-neutral">Local Time</span>
         </div>
         <div id="windowRecommendationBox" class="callout callout-info">Loading 24-hour forecast...</div>
+        <div class="chart-legend" aria-label="24-hour chart legend">
+          <span class="legend-item"><span class="legend-swatch bar-SAFE"></span> SAFE</span>
+          <span class="legend-item"><span class="legend-swatch bar-CAUTION"></span> CAUTION</span>
+          <span class="legend-item"><span class="legend-swatch bar-DO_NOT_SAIL"></span> DO NOT SAIL</span>
+          <span class="legend-item"><span class="legend-swatch legend-window"></span> Recommended Window</span>
+          <span class="legend-item"><span class="legend-now-tag">NOW</span> Active Forecast Hour</span>
+        </div>
         <div id="hourlyChart" class="hourly-chart"></div>
-        <div id="hourlyInspector" class="hourly-inspector muted">Click any hour column above to inspect exact hourly wind, wave, gust, and current metrics.</div>
+        <div id="hourlyInspector" class="hourly-inspector muted">Select any hour column above to inspect exact hourly wind, wave, gust, and current metrics.</div>
       </div>
     </section>
 

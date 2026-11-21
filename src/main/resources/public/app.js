@@ -586,7 +586,7 @@ async function evaluateActiveZone(refresh) {
     state.lastEvalData = data;
     updateConnectionBadge(data.zone.dataSourceMode);
     renderZoneVerdict(data.zone, data.currentSlot, data.currentEvaluation);
-    render24HourChart(data.windowAnalysis);
+    render24HourChart(data.windowAnalysis, data.zone, data.currentSlot);
     updateClearanceSummary();
   } catch (err) {
     if (reqId !== state.evalRequestSeq) return;
@@ -755,7 +755,56 @@ function renderMetricCards(zone, slot, evalObj) {
   `;
 }
 
-function render24HourChart(analysis) {
+function findRecommendedWindowRange(points, recWindow) {
+  if (!recWindow || !Array.isArray(points) || points.length === 0) return null;
+  const len = Number(recWindow.durationHours) || 0;
+  if (len <= 0) return null;
+
+  for (let i = 0; i <= points.length - len; i++) {
+    const startPt = points[i];
+    const endPt = points[i + len - 1];
+    if (startPt.slot.timeLocal === recWindow.startTimeLocal
+        && endPt.slot.timeLocal === recWindow.endTimeLocal) {
+      let allMatch = true;
+      for (let j = i; j < i + len; j++) {
+        if (points[j].evaluation.status !== recWindow.windowStatus) {
+          allMatch = false;
+          break;
+        }
+      }
+      if (allMatch) return { start: i, end: i + len - 1 };
+    }
+  }
+  return null;
+}
+
+function renderHourlyInspector(pt, isNow, inWindow) {
+  const inspector = el("hourlyInspector");
+  if (!pt) {
+    inspector.className = "hourly-inspector muted";
+    inspector.textContent = "Select any hour column above to inspect exact hourly wind, wave, gust, and current metrics.";
+    return;
+  }
+
+  inspector.className = "hourly-inspector";
+  inspector.innerHTML =
+    `<strong>${escapeHtml(pt.slot.timeLocal)} (${escapeHtml(pt.slot.timeUtc)}):</strong>` +
+    `<span class="${statusPillClass(pt.evaluation.status)}">${escapeHtml(formatStatus(pt.evaluation.status))}</span>` +
+    (isNow ? `<span class="inspector-tag">ACTIVE HOUR</span>` : "") +
+    (inWindow ? `<span class="inspector-tag">RECOMMENDED WINDOW</span>` : "") +
+    `<span>Risk <strong>${escapeHtml(pt.evaluation.riskScore)}/100</strong> | ` +
+    `Wave <strong>${Number(pt.slot.waveHeight).toFixed(2)} m</strong> (${escapeHtml(pt.slot.waveCat)}), ` +
+    `Wind <strong>${Number(pt.slot.windSpeed).toFixed(1)} kt</strong> (Gust ${Number(pt.slot.windGust).toFixed(1)} kt), ` +
+    `Current <strong>${Number(pt.slot.currentSpeed).toFixed(2)} kt</strong>, ` +
+    `Weather: ${escapeHtml(pt.slot.weather)}</span>`;
+}
+
+function render24HourChart(analysis, zone, currentSlot) {
+  const tzBadge = el("chartTimezoneBadge");
+  if (tzBadge) {
+    tzBadge.textContent = zone?.timezoneLabel ? `Times in ${zone.timezoneLabel}` : "Local Time";
+  }
+
   const recBox = el("windowRecommendationBox");
   recBox.className = "callout " + (analysis.recommendedWindow
     ? (analysis.recommendedWindow.windowStatus === "SAFE" ? "callout-safe" : "callout-info")
@@ -767,28 +816,64 @@ function render24HourChart(analysis) {
 
   const chart = el("hourlyChart");
   chart.innerHTML = "";
-  (analysis.hourlyPoints || []).forEach((pt) => {
-    const col = document.createElement("div");
-    col.className = "hour-col";
-    const heightPct = Math.max(12, pt.evaluation.riskScore);
+
+  const points = analysis.hourlyPoints || [];
+  if (points.length === 0) {
+    renderHourlyInspector(null, false, false);
+    return;
+  }
+
+  const recRange = findRecommendedWindowRange(points, analysis.recommendedWindow);
+  let defaultSelectIdx = 0;
+  const colButtons = [];
+
+  points.forEach((pt, idx) => {
+    const isNow = Boolean(currentSlot && pt.slot.timeUtc === currentSlot.timeUtc);
+    const inWindow = Boolean(recRange && idx >= recRange.start && idx <= recRange.end);
+    if (isNow) defaultSelectIdx = idx;
+
+    const col = document.createElement("button");
+    col.type = "button";
+    col.className = "hour-col"
+      + (inWindow ? " hour-col-window" : "")
+      + (isNow ? " hour-col-now" : "");
+
+    const scoreVal = Math.max(0, Math.min(100, Number(pt.evaluation.riskScore) || 0));
+    const barPct = Math.max(6, scoreVal);
     const shortHour = pt.slot.timeLocal.replace(/\s+(WIB|WITA|WIT)$/, "");
+
+    col.setAttribute(
+      "aria-label",
+      `${pt.slot.timeLocal}, ${formatStatus(pt.evaluation.status)}, Risk ${scoreVal} out of 100${isNow ? ", Active Hour" : ""}${inWindow ? ", Recommended Window" : ""}`
+    );
+
     col.innerHTML = `
-      <span class="hour-score">${escapeHtml(pt.evaluation.riskScore)}</span>
-      <div class="hour-bar bar-${escapeHtml(pt.evaluation.status)}" style="height: ${heightPct}%"></div>
+      <span class="hour-now-slot">${isNow ? `<span class="hour-now-pill">NOW</span>` : ""}</span>
+      <span class="hour-score">${escapeHtml(scoreVal)}</span>
+      <div class="hour-bar-track">
+        <div class="hour-bar bar-${escapeHtml(pt.evaluation.status)}" style="height: ${barPct}%"></div>
+      </div>
       <span class="hour-label">${escapeHtml(shortHour)}</span>
     `;
+
     col.addEventListener("click", () => {
-      el("hourlyInspector").innerHTML =
-        `<strong>${escapeHtml(pt.slot.timeLocal)} (${escapeHtml(pt.slot.timeUtc)}):</strong> ` +
-        `<span class="${statusPillClass(pt.evaluation.status)}">${escapeHtml(formatStatus(pt.evaluation.status))}</span> ` +
-        `<span>Risk <strong>${escapeHtml(pt.evaluation.riskScore)}/100</strong> | ` +
-        `Wave <strong>${Number(pt.slot.waveHeight).toFixed(2)} m</strong> (${escapeHtml(pt.slot.waveCat)}), ` +
-        `Wind <strong>${Number(pt.slot.windSpeed).toFixed(1)} kt</strong> (Gust ${Number(pt.slot.windGust).toFixed(1)} kt), ` +
-        `Current <strong>${Number(pt.slot.currentSpeed).toFixed(2)} kt</strong>, ` +
-        `Weather: ${escapeHtml(pt.slot.weather)}</span>`;
+      colButtons.forEach((btn) => btn.classList.remove("hour-col-selected"));
+      col.classList.add("hour-col-selected");
+      renderHourlyInspector(pt, isNow, inWindow);
     });
+
+    colButtons.push(col);
     chart.appendChild(col);
   });
+
+  // Pre-select the active forecast hour (NOW) on render
+  if (colButtons[defaultSelectIdx]) {
+    const pt = points[defaultSelectIdx];
+    const isNow = Boolean(currentSlot && pt.slot.timeUtc === currentSlot.timeUtc);
+    const inWindow = Boolean(recRange && defaultSelectIdx >= recRange.start && defaultSelectIdx <= recRange.end);
+    colButtons[defaultSelectIdx].classList.add("hour-col-selected");
+    renderHourlyInspector(pt, isNow, inWindow);
+  }
 }
 
 function renderRouteChips() {
