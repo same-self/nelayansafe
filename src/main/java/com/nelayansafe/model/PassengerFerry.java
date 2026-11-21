@@ -1,61 +1,75 @@
 package com.nelayansafe.model;
 
+import com.nelayansafe.exception.MissingSafetyGearException;
+import com.nelayansafe.exception.VesselOvercapacityException;
+
 import java.util.ArrayList;
 import java.util.List;
 
 public class PassengerFerry extends Vessel {
+    private int maxPassengers;
+    private int currentPassengers;
 
     public PassengerFerry(String vesselId, String vesselName, int maxCrewCapacity,
                           boolean hasLifeJackets, boolean hasWorkingRadio) {
+        this(vesselId, vesselName, maxCrewCapacity, hasLifeJackets, hasWorkingRadio, 300, 180);
+    }
+
+    public PassengerFerry(String vesselId, String vesselName, int maxCrewCapacity,
+                          boolean hasLifeJackets, boolean hasWorkingRadio,
+                          int maxPassengers, int currentPassengers) {
         super(vesselId, vesselName, "PassengerFerry", maxCrewCapacity,
               21.0, 2.50, hasLifeJackets, hasWorkingRadio);
+        if (maxPassengers <= 0) {
+            throw new IllegalArgumentException("Max passenger capacity must be positive.");
+        }
+        if (currentPassengers < 0) {
+            throw new IllegalArgumentException("Current passenger count cannot be negative.");
+        }
+        this.maxPassengers = maxPassengers;
+        this.currentPassengers = currentPassengers;
     }
 
     @Override
-    public int calculateRiskScore(MarineForecastSlot slot) {
-        double waveRatio = slot.getWaveHeight() / getMaxSafeWaveMeters();
-        double windRatio = slot.getWindSpeed() / getMaxSafeWindKnots();
-        double gustPenalty = Math.max(0, (slot.getWindGust() - (getMaxSafeWindKnots() * 1.25)) / 12.0) * 10.0;
-        double base = Math.max(waveRatio, windRatio) * 58.0 + ((waveRatio + windRatio) * 0.5) * 16.0;
-        return (int) Math.min(100, Math.round(base + gustPenalty));
+    public void validateEquipmentAndCapacity(int crewCount)
+            throws VesselOvercapacityException, MissingSafetyGearException {
+        super.validateEquipmentAndCapacity(crewCount);
+        if (currentPassengers > maxPassengers) {
+            throw new VesselOvercapacityException(
+                String.format("PassengerFerry '%s' is overloaded: %d passengers exceed maximum capacity of %d.",
+                    getVesselName(), currentPassengers, maxPassengers));
+        }
+    }
+
+    @Override
+    protected double calculateVesselModifier(MarineForecastSlot slot) {
+        double occupancyRatio = Math.min(1.0, (double) currentPassengers / maxPassengers);
+        double rollFactor = Math.min(1.0, slot.getWaveHeight() / getMaxSafeWaveMeters())
+                * (4.0 + (4.0 * occupancyRatio));
+        double gustFactor = Math.min(7.0,
+                Math.max(0.0, (slot.getWindGust() - getMaxSafeWindKnots()) / getMaxSafeWindKnots()) * 14.0);
+        return Math.min(15.0, rollFactor + gustFactor);
     }
 
     @Override
     public SafetyEvaluation evaluateSafety(MarineForecastSlot slot) {
         List<String> reasons = new ArrayList<>();
-        SafetyStatus status = SafetyStatus.SAFE;
+        SafetyStatus status = applyStandardBmkgEvaluation(slot, reasons, "Passenger Ferry");
 
-        if (slot.getWaveHeight() > getMaxSafeWaveMeters()) {
-            status = SafetyStatus.DO_NOT_SAIL;
-            reasons.add(String.format("Wave height %.2f m exceeds BMKG Passenger Ferry limit (%.2f m).",
-                slot.getWaveHeight(), getMaxSafeWaveMeters()));
-        }
-        if (slot.getWindSpeed() > getMaxSafeWindKnots()) {
-            status = SafetyStatus.DO_NOT_SAIL;
-            reasons.add(String.format("Wind speed %.1f kt exceeds BMKG Passenger Ferry limit (%.1f kt).",
-                slot.getWindSpeed(), getMaxSafeWindKnots()));
-        }
-
-        if (status != SafetyStatus.DO_NOT_SAIL) {
-            if (slot.getWaveHeight() >= getMaxSafeWaveMeters() * 0.80) {
-                status = SafetyStatus.CAUTION;
-                reasons.add(String.format("Swell of %.2f m may cause heavy vessel rolling for passengers (limit %.2f m).",
-                    slot.getWaveHeight(), getMaxSafeWaveMeters()));
-            }
-            if (slot.getWindSpeed() >= getMaxSafeWindKnots() * 0.80 || slot.getWindGust() >= 27.0) {
-                status = SafetyStatus.CAUTION;
-                reasons.add(String.format("High winds (%.1f kt, gusts %.1f kt) require passenger cabin briefing.",
-                    slot.getWindSpeed(), slot.getWindGust()));
-            }
+        if (status == SafetyStatus.CAUTION && ((double) currentPassengers / maxPassengers) >= 0.80) {
+            reasons.add(String.format("High passenger load (%d / %d onboard) requires mandatory cabin safety briefing.",
+                    currentPassengers, maxPassengers));
         }
 
         if (reasons.isEmpty()) {
-            reasons.add("Sea conditions meet BMKG Passenger Ferry safety and passenger comfort standards.");
+            reasons.add(String.format(
+                    "Sea conditions meet BMKG Passenger Ferry safety standards (%d / %d passengers onboard).",
+                    currentPassengers, maxPassengers));
         }
 
         int score = calculateRiskScore(slot);
         String summary = switch (status) {
-            case DO_NOT_SAIL -> "DO NOT SAIL: Sea conditions violate BMKG safety limits for Passenger Ferries.";
+            case DO_NOT_SAIL -> "DO NOT SAIL: Sea conditions meet or exceed BMKG safety limits for Passenger Ferries.";
             case CAUTION -> "CAUTION: Rough crossing expected. Secure vehicles/cargo and brief passengers before boarding.";
             case SAFE -> "SAFE TO SAIL: Crossing conditions are safe for Passenger Ferries.";
         };
@@ -63,4 +77,7 @@ public class PassengerFerry extends Vessel {
         return new SafetyEvaluation(status, score, getVesselType(), getMaxSafeWindKnots(),
                 getMaxSafeWaveMeters(), slot.getTimeWib(), summary, reasons);
     }
+
+    public int getMaxPassengers() { return maxPassengers; }
+    public int getCurrentPassengers() { return currentPassengers; }
 }

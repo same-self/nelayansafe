@@ -89,13 +89,23 @@ public class NelayanSafeWebServer {
         if (handleCorsPreflight(ex)) return;
         try {
             Map<String, String> q = parseQuery(ex);
+            Vessel.VesselOptions opts = new Vessel.VesselOptions(
+                    parseDouble(q.get("grossTonnage"), 5.0),
+                    parseDouble(q.get("maxSafeCurrentKnots"), 2.0),
+                    parseDouble(q.get("maxCargoTon"), 3000.0),
+                    parseDouble(q.get("currentCargoTon"), 2000.0),
+                    parseInt(q.get("maxPassengers"), 300),
+                    parseInt(q.get("currentPassengers"), 180),
+                    parseInt(q.get("maxContainerTEU"), 1200)
+            );
             Vessel vessel = Vessel.create(
                     q.getOrDefault("vesselType", "SmallFishingBoat"),
                     q.getOrDefault("vesselId", "VSL-001"),
                     q.getOrDefault("vesselName", "KM Nelayan Sejahtera"),
                     parseInt(q.get("maxCrew"), 6),
                     Boolean.parseBoolean(q.getOrDefault("lifeJackets", "true")),
-                    Boolean.parseBoolean(q.getOrDefault("radio", "true"))
+                    Boolean.parseBoolean(q.getOrDefault("radio", "true")),
+                    opts
             );
 
             String areaCode = q.getOrDefault("areaCode", "P.AE.09");
@@ -230,13 +240,26 @@ public class NelayanSafeWebServer {
     }
 
     private Vessel vesselFromJson(JsonObject body) {
-        String type = body.has("vesselType") ? body.get("vesselType").getAsString() : "SmallFishingBoat";
-        String id = body.has("vesselId") ? body.get("vesselId").getAsString() : "VSL-001";
-        String name = body.has("vesselName") ? body.get("vesselName").getAsString() : "KM Nelayan Sejahtera";
-        int maxCrew = body.has("maxCrew") ? body.get("maxCrew").getAsInt() : 6;
+        String type = body.has("vesselType") && !body.get("vesselType").isJsonNull()
+                ? body.get("vesselType").getAsString() : "SmallFishingBoat";
+        String id = body.has("vesselId") && !body.get("vesselId").isJsonNull()
+                ? body.get("vesselId").getAsString() : "VSL-001";
+        String name = body.has("vesselName") && !body.get("vesselName").isJsonNull()
+                ? body.get("vesselName").getAsString() : "KM Nelayan Sejahtera";
+        int maxCrew = getInt(body, "maxCrew", 6);
         boolean lifeJackets = getBool(body, "lifeJackets", true);
         boolean radio = getBool(body, "radio", true);
-        return Vessel.create(type, id, name, maxCrew, lifeJackets, radio);
+
+        Vessel.VesselOptions opts = new Vessel.VesselOptions(
+                getDouble(body, "grossTonnage", 5.0),
+                getDouble(body, "maxSafeCurrentKnots", 2.0),
+                getDouble(body, "maxCargoTon", 3000.0),
+                getDouble(body, "currentCargoTon", 2000.0),
+                getInt(body, "maxPassengers", 300),
+                getInt(body, "currentPassengers", 180),
+                getInt(body, "maxContainerTEU", 1200)
+        );
+        return Vessel.create(type, id, name, maxCrew, lifeJackets, radio, opts);
     }
 
     private List<String> readAreaCodes(JsonObject body) {
@@ -260,6 +283,33 @@ public class NelayanSafeWebServer {
         try {
             return Integer.parseInt(val.trim());
         } catch (NumberFormatException e) {
+            return def;
+        }
+    }
+
+    private double parseDouble(String val, double def) {
+        if (val == null || val.isBlank()) return def;
+        try {
+            return Double.parseDouble(val.trim());
+        } catch (NumberFormatException e) {
+            return def;
+        }
+    }
+
+    private int getInt(JsonObject obj, String key, int def) {
+        if (!obj.has(key) || obj.get(key).isJsonNull()) return def;
+        try {
+            return obj.get(key).getAsInt();
+        } catch (Exception e) {
+            return def;
+        }
+    }
+
+    private double getDouble(JsonObject obj, String key, double def) {
+        if (!obj.has(key) || obj.get(key).isJsonNull()) return def;
+        try {
+            return obj.get(key).getAsDouble();
+        } catch (Exception e) {
             return def;
         }
     }
