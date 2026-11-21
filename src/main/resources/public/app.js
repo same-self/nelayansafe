@@ -101,12 +101,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateClearanceSummary();
 });
 
-function activateTab(tabId) {
-  document.querySelectorAll(".tab-btn").forEach((b) => {
-    b.classList.toggle("active", b.dataset.tab === tabId);
+function activateTab(tabId, focusTab = false) {
+  const tabButtons = Array.from(document.querySelectorAll(".tab-btn"));
+  tabButtons.forEach((b) => {
+    const isSelected = b.dataset.tab === tabId;
+    b.classList.toggle("active", isSelected);
+    b.setAttribute("aria-selected", String(isSelected));
+    b.setAttribute("tabindex", isSelected ? "0" : "-1");
+    if (isSelected && focusTab) b.focus();
   });
   document.querySelectorAll(".tab-content").forEach((c) => {
-    c.classList.toggle("active", c.id === tabId);
+    const isActive = c.id === tabId;
+    c.classList.toggle("active", isActive);
+    c.hidden = !isActive;
   });
 
   if (tabId === "routeTab") {
@@ -121,8 +128,44 @@ function activateTab(tabId) {
 }
 
 function bindTabs() {
-  document.querySelectorAll(".tab-btn").forEach((btn) => {
-    btn.addEventListener("click", () => activateTab(btn.dataset.tab));
+  const tabButtons = Array.from(document.querySelectorAll(".tab-btn"));
+  tabButtons.forEach((btn, idx) => {
+    btn.addEventListener("click", () => activateTab(btn.dataset.tab, false));
+    btn.addEventListener("keydown", (e) => {
+      let targetIdx = -1;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        targetIdx = (idx + 1) % tabButtons.length;
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        targetIdx = (idx - 1 + tabButtons.length) % tabButtons.length;
+      } else if (e.key === "Home") {
+        targetIdx = 0;
+      } else if (e.key === "End") {
+        targetIdx = tabButtons.length - 1;
+      }
+      if (targetIdx !== -1) {
+        e.preventDefault();
+        activateTab(tabButtons[targetIdx].dataset.tab, true);
+      }
+    });
+  });
+}
+
+function updateRulesTabHighlight(vesselType) {
+  const badge = el("rulesActiveVesselBadge");
+  if (badge) badge.textContent = `Active: ${vesselType}`;
+
+  document.querySelectorAll("tr[data-vessel-row]").forEach((row) => {
+    const isActive = row.dataset.vesselRow === vesselType;
+    row.classList.toggle("row-active-vessel", isActive);
+    const pill = row.querySelector(".active-class-pill");
+    if (pill) pill.classList.toggle("hidden", !isActive);
+  });
+
+  document.querySelectorAll(".oop-child-box[data-oop-class]").forEach((box) => {
+    const isActive = box.dataset.oopClass === vesselType;
+    box.classList.toggle("child-active-vessel", isActive);
+    const pill = box.querySelector(".active-class-pill");
+    if (pill) pill.classList.toggle("hidden", !isActive);
   });
 }
 
@@ -136,6 +179,7 @@ function toggleSubclassSpecFields(vesselType) {
   Object.values(map).forEach((id) => el(id)?.classList.add("hidden"));
   const activeId = map[vesselType];
   if (activeId) el(activeId)?.classList.remove("hidden");
+  updateRulesTabHighlight(vesselType);
 }
 
 function setActivePreset(presetName) {
@@ -345,6 +389,10 @@ function bindEvents() {
       el("clearanceResultBox").classList.add("hidden");
       updateClearanceSummary();
     });
+  });
+
+  el("cautionAckCheckbox").addEventListener("change", () => {
+    updateClearanceSummary();
   });
 
   el("requestClearanceBtn").addEventListener("click", submitClearance);
@@ -827,6 +875,21 @@ function render24HourChart(analysis, zone, currentSlot) {
   let defaultSelectIdx = 0;
   const colButtons = [];
 
+  function selectHourColumn(targetIdx, moveFocus = false) {
+    if (!colButtons[targetIdx]) return;
+    colButtons.forEach((btn, i) => {
+      const isSelected = i === targetIdx;
+      btn.classList.toggle("hour-col-selected", isSelected);
+      btn.setAttribute("aria-pressed", String(isSelected));
+      btn.setAttribute("tabindex", isSelected ? "0" : "-1");
+    });
+    if (moveFocus) colButtons[targetIdx].focus();
+    const pt = points[targetIdx];
+    const isNow = Boolean(currentSlot && pt.slot.timeUtc === currentSlot.timeUtc);
+    const inWindow = Boolean(recRange && targetIdx >= recRange.start && targetIdx <= recRange.end);
+    renderHourlyInspector(pt, isNow, inWindow);
+  }
+
   points.forEach((pt, idx) => {
     const isNow = Boolean(currentSlot && pt.slot.timeUtc === currentSlot.timeUtc);
     const inWindow = Boolean(recRange && idx >= recRange.start && idx <= recRange.end);
@@ -842,6 +905,8 @@ function render24HourChart(analysis, zone, currentSlot) {
     const barPct = Math.max(6, scoreVal);
     const shortHour = pt.slot.timeLocal.replace(/\s+(WIB|WITA|WIT)$/, "");
 
+    col.setAttribute("tabindex", idx === defaultSelectIdx ? "0" : "-1");
+    col.setAttribute("aria-pressed", "false");
     col.setAttribute(
       "aria-label",
       `${pt.slot.timeLocal}, ${formatStatus(pt.evaluation.status)}, Risk ${scoreVal} out of 100${isNow ? ", Active Hour" : ""}${inWindow ? ", Recommended Window" : ""}`
@@ -856,10 +921,22 @@ function render24HourChart(analysis, zone, currentSlot) {
       <span class="hour-label">${escapeHtml(shortHour)}</span>
     `;
 
-    col.addEventListener("click", () => {
-      colButtons.forEach((btn) => btn.classList.remove("hour-col-selected"));
-      col.classList.add("hour-col-selected");
-      renderHourlyInspector(pt, isNow, inWindow);
+    col.addEventListener("click", () => selectHourColumn(idx, false));
+    col.addEventListener("keydown", (e) => {
+      let nextIdx = -1;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        nextIdx = (idx + 1) % points.length;
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        nextIdx = (idx - 1 + points.length) % points.length;
+      } else if (e.key === "Home") {
+        nextIdx = 0;
+      } else if (e.key === "End") {
+        nextIdx = points.length - 1;
+      }
+      if (nextIdx !== -1) {
+        e.preventDefault();
+        selectHourColumn(nextIdx, true);
+      }
     });
 
     colButtons.push(col);
@@ -867,13 +944,7 @@ function render24HourChart(analysis, zone, currentSlot) {
   });
 
   // Pre-select the active forecast hour (NOW) on render
-  if (colButtons[defaultSelectIdx]) {
-    const pt = points[defaultSelectIdx];
-    const isNow = Boolean(currentSlot && pt.slot.timeUtc === currentSlot.timeUtc);
-    const inWindow = Boolean(recRange && defaultSelectIdx >= recRange.start && defaultSelectIdx <= recRange.end);
-    colButtons[defaultSelectIdx].classList.add("hour-col-selected");
-    renderHourlyInspector(pt, isNow, inWindow);
-  }
+  selectHourColumn(defaultSelectIdx, false);
 }
 
 function renderRouteChips() {
@@ -904,6 +975,7 @@ function renderRouteChips() {
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
     removeBtn.title = "Remove zone from route";
+    removeBtn.setAttribute("aria-label", `Remove ${state.zoneNamesByCode[code] || code} from route`);
     removeBtn.textContent = "×";
     removeBtn.addEventListener("click", () => {
       state.routeCodes.splice(idx, 1);
@@ -964,6 +1036,7 @@ async function analyzeRoute(forceRefresh = false) {
     const re = data.routeEvaluation;
     state.lastRouteData = re;
     state.routeDirty = false;
+    updateClearanceSummary();
 
     box.className = `verdict-banner verdict-${re.overallStatus}`;
     box.classList.remove("hidden");
@@ -1058,6 +1131,183 @@ function getClearanceRecommendedWindow(targetCodes) {
   return `Live multi-zone check across ${targetCodes.length} sea zone${targetCodes.length === 1 ? "" : "s"}`;
 }
 
+function getExceptionGuidance(errorType) {
+  switch (errorType) {
+    case "VesselOvercapacityException":
+      return "Adjust crew count, cargo tons, or passenger count in the Vessel Profile above so it does not exceed maximum vessel capacity.";
+    case "MissingSafetyGearException":
+      return "Check both Mandatory Life Jackets and Working Marine Radio in the Vessel Profile above before requesting clearance.";
+    case "UnsafeSeaConditionException":
+      return "Severe weather detected (DO NOT SAIL), or conditions are CAUTION without Captain Acknowledgment. If conditions are CAUTION, tick Captain Acknowledgment above or wait for a calmer departure window.";
+    case "BmkgApiUnavailableException":
+      return "The BMKG maritime service is currently unreachable and no offline cache is available. Verify internet connectivity or click Refresh Live BMKG.";
+    default:
+      return "Review vessel inputs, safety gear, and sea conditions before resubmitting.";
+  }
+}
+
+function renderClearanceGuardrails(v, targetCodes) {
+  const wrap = el("clearanceGuardrails");
+  if (!wrap) return;
+
+  // 1. Capacity Check
+  const crewInvalid = v.crewCount <= 0 || v.maxCrew <= 0;
+  const crewOverloaded = v.crewCount > v.maxCrew;
+  const cargoOverloaded = v.vesselType === "BargeVessel" && v.currentCargoTon > v.maxCargoTon;
+  const paxOverloaded = v.vesselType === "PassengerFerry" && v.currentPassengers > v.maxPassengers;
+
+  let capStatus = "PASS";
+  let capClass = "guardrail-pass";
+  let capPillClass = "pill-pass";
+  let capTitle = "Capacity Gate Passed";
+  let capDetail = `Crew ${v.crewCount}/${v.maxCrew} within limits.`;
+
+  if (crewInvalid) {
+    capStatus = "BLOCK";
+    capClass = "guardrail-block";
+    capPillClass = "pill-block";
+    capTitle = "Invalid Crew Count";
+    capDetail = "Crew count must be greater than zero (triggers IllegalArgumentException).";
+  } else if (crewOverloaded) {
+    capStatus = "BLOCK";
+    capClass = "guardrail-block";
+    capPillClass = "pill-block";
+    capTitle = "Crew Overcapacity";
+    capDetail = `Crew count (${v.crewCount}) exceeds maximum vessel capacity (${v.maxCrew}) (triggers VesselOvercapacityException).`;
+  } else if (cargoOverloaded) {
+    capStatus = "BLOCK";
+    capClass = "guardrail-block";
+    capPillClass = "pill-block";
+    capTitle = "Cargo Overcapacity";
+    capDetail = `Cargo weight (${v.currentCargoTon} t) exceeds maximum payload (${v.maxCargoTon} t) (triggers VesselOvercapacityException).`;
+  } else if (paxOverloaded) {
+    capStatus = "BLOCK";
+    capClass = "guardrail-block";
+    capPillClass = "pill-block";
+    capTitle = "Passenger Overcapacity";
+    capDetail = `Passenger count (${v.currentPassengers}) exceeds certified capacity (${v.maxPassengers}) (triggers VesselOvercapacityException).`;
+  } else if (v.vesselType === "BargeVessel") {
+    capDetail = `Crew ${v.crewCount}/${v.maxCrew} & Cargo ${v.currentCargoTon}/${v.maxCargoTon} t within safe limits.`;
+  } else if (v.vesselType === "PassengerFerry") {
+    capDetail = `Crew ${v.crewCount}/${v.maxCrew} & Passengers ${v.currentPassengers}/${v.maxPassengers} within safe limits.`;
+  }
+
+  // 2. Mandatory Safety Gear Check
+  let gearStatus = "PASS";
+  let gearClass = "guardrail-pass";
+  let gearPillClass = "pill-pass";
+  let gearTitle = "Mandatory Gear Verified";
+  let gearDetail = "Both Life Jackets and Working Marine Radio are onboard.";
+
+  if (!v.lifeJackets && !v.radio) {
+    gearStatus = "BLOCK";
+    gearClass = "guardrail-block";
+    gearPillClass = "pill-block";
+    gearTitle = "Missing Life Jackets and Radio";
+    gearDetail = "Mandatory safety gear missing (triggers MissingSafetyGearException).";
+  } else if (!v.lifeJackets) {
+    gearStatus = "BLOCK";
+    gearClass = "guardrail-block";
+    gearPillClass = "pill-block";
+    gearTitle = "Missing Life Jackets";
+    gearDetail = "Vessel cannot sail without approved life jackets (triggers MissingSafetyGearException).";
+  } else if (!v.radio) {
+    gearStatus = "BLOCK";
+    gearClass = "guardrail-block";
+    gearPillClass = "pill-block";
+    gearTitle = "Missing Marine Radio";
+    gearDetail = "Vessel cannot sail without two-way marine radio (triggers MissingSafetyGearException).";
+  }
+
+  // 3. Weather and Caution Gate
+  let weatherStatus = "PENDING";
+  let weatherClass = "guardrail-pending";
+  let weatherPillClass = "pill-pending";
+  let weatherTitle = "Evaluating Weather...";
+  let weatherDetail = "Checking BMKG sea forecast for selected zone(s).";
+
+  const isSim = el("simulateStormToggle").checked;
+  const cautionAck = el("cautionAckCheckbox").checked;
+
+  let activeConditionStatus = null;
+  if (state.clearanceScope === "multiZone") {
+    if (targetCodes.length === 0) {
+      weatherStatus = "BLOCK";
+      weatherClass = "guardrail-block";
+      weatherPillClass = "pill-block";
+      weatherTitle = "No Route Zones";
+      weatherDetail = "Add at least one sea zone in Tab 2 or switch to Current Sea Zone.";
+    } else if (state.lastRouteData) {
+      activeConditionStatus = state.lastRouteData.overallStatus;
+    }
+  } else {
+    if (state.lastEvalData?.evaluation) {
+      activeConditionStatus = state.lastEvalData.evaluation.status;
+    }
+  }
+
+  if (activeConditionStatus) {
+    if (activeConditionStatus === "DO_NOT_SAIL") {
+      weatherStatus = "BLOCK";
+      weatherClass = "guardrail-block";
+      weatherPillClass = "pill-block";
+      weatherTitle = "Severe Sea Conditions";
+      weatherDetail = isSim
+        ? "Simulated tropical storm triggers mandatory DO NOT SAIL (UnsafeSeaConditionException)."
+        : "BMKG limits exceeded (wind or wave >= limit). Sailing strictly prohibited (UnsafeSeaConditionException).";
+    } else if (activeConditionStatus === "CAUTION") {
+      if (cautionAck) {
+        weatherStatus = "PASS";
+        weatherClass = "guardrail-pass";
+        weatherPillClass = "pill-pass";
+        weatherTitle = "Caution Acknowledged";
+        weatherDetail = "Caution conditions present (>=75% buffer/gust/current). Captain acknowledgment verified.";
+      } else {
+        weatherStatus = "WARN";
+        weatherClass = "guardrail-warn";
+        weatherPillClass = "pill-warn";
+        weatherTitle = "Captain Ack Required";
+        weatherDetail = "Caution conditions present. Must check Captain Acknowledgment before clearance (UnsafeSeaConditionException).";
+      }
+    } else if (activeConditionStatus === "SAFE") {
+      weatherStatus = "PASS";
+      weatherClass = "guardrail-pass";
+      weatherPillClass = "pill-pass";
+      weatherTitle = "Sea Conditions Safe";
+      weatherDetail = "All wave, wind, and current parameters remain safely below caution buffers.";
+    }
+  }
+
+  wrap.innerHTML = `
+    <div class="guardrail-card ${capClass}">
+      <div class="guardrail-header">
+        <span class="guardrail-step">Step 1: Capacity</span>
+        <span class="guardrail-status-pill ${capPillClass}">${capStatus}</span>
+      </div>
+      <h4 class="guardrail-title">${escapeHtml(capTitle)}</h4>
+      <p class="guardrail-detail">${escapeHtml(capDetail)}</p>
+    </div>
+
+    <div class="guardrail-card ${gearClass}">
+      <div class="guardrail-header">
+        <span class="guardrail-step">Step 2: Safety Gear</span>
+        <span class="guardrail-status-pill ${gearPillClass}">${gearStatus}</span>
+      </div>
+      <h4 class="guardrail-title">${escapeHtml(gearTitle)}</h4>
+      <p class="guardrail-detail">${escapeHtml(gearDetail)}</p>
+    </div>
+
+    <div class="guardrail-card ${weatherClass}">
+      <div class="guardrail-header">
+        <span class="guardrail-step">Step 3: Weather Gate</span>
+        <span class="guardrail-status-pill ${weatherPillClass}">${weatherStatus}</span>
+      </div>
+      <h4 class="guardrail-title">${escapeHtml(weatherTitle)}</h4>
+      <p class="guardrail-detail">${escapeHtml(weatherDetail)}</p>
+    </div>
+  `;
+}
+
 function updateClearanceSummary() {
   const v = getVesselParams();
   const activeCode = el("zoneSelect").value || "P.AE.09";
@@ -1075,6 +1325,7 @@ function updateClearanceSummary() {
     : "No zones in Multi-Zone Route. Add zones in Tab 2 or switch to Current Sea Zone (Tab 1).";
 
   el("clrWindowSummary").textContent = getClearanceRecommendedWindow(targetCodes);
+  renderClearanceGuardrails(v, targetCodes);
 }
 
 async function submitClearance() {
@@ -1084,8 +1335,17 @@ async function submitClearance() {
   const areaCodes = getClearanceTargetCodes();
   if (areaCodes.length === 0) {
     box.classList.remove("hidden");
-    box.className = "callout callout-danger";
-    box.innerHTML = `<strong>⛔ CLEARANCE NOT SUBMITTED:</strong> Add at least one sea zone in Multi-Zone Route (Tab 2) or switch Clearance Scope to Current Sea Zone (Tab 1).`;
+    box.innerHTML = `
+      <div class="clearance-result clearance-result-REJECTED">
+        <div class="clearance-result-header">
+          <span class="status-pill pill-DO_NOT_SAIL">NO ROUTE SELECTED</span>
+          <h3>Departure Clearance Not Submitted</h3>
+        </div>
+        <div class="clearance-result-body">
+          <p>Add at least one sea zone in Multi-Zone Route (Tab 2) or switch Clearance Scope to Current Sea Zone (Tab 1).</p>
+        </div>
+      </div>
+    `;
     return;
   }
 
@@ -1110,22 +1370,53 @@ async function submitClearance() {
     box.classList.remove("hidden");
 
     if (!data.success) {
-      box.className = "callout callout-danger";
-      box.innerHTML = `<strong>⛔ CLEARANCE BLOCKED [${escapeHtml(data.errorType)}]:</strong> ${escapeHtml(data.message)}`;
+      box.innerHTML = `
+        <div class="clearance-result clearance-result-REJECTED">
+          <div class="clearance-result-header">
+            <span class="status-pill pill-DO_NOT_SAIL">CLEARANCE REJECTED</span>
+            <h3>Departure Blocked by Port Authority (Syahbandar)</h3>
+          </div>
+          <div class="clearance-result-body">
+            <div class="exception-box">
+              <div class="exception-header">
+                <span class="exception-code-badge">${escapeHtml(data.errorType || "DepartureException")}</span>
+              </div>
+              <p class="exception-message">${escapeHtml(data.message)}</p>
+              <p class="exception-guidance"><strong>Recommended Action:</strong> ${escapeHtml(getExceptionGuidance(data.errorType))}</p>
+            </div>
+          </div>
+        </div>
+      `;
       return;
     }
 
     const c = data.clearance;
-    box.className = "callout callout-safe";
-    box.innerHTML =
-      `<strong>✅ CLEARANCE ISSUED (${escapeHtml(c.clearanceId)}):</strong> ` +
-      `${escapeHtml(c.vesselName)} cleared for ${escapeHtml((c.routeZoneCodes || []).join(" → "))} ` +
-      `(${escapeHtml(formatStatus(c.safetyStatus))}, Risk ${escapeHtml(c.riskScore)}/100) at ${escapeHtml(c.issuedTimestampLocal)}.`;
+    box.innerHTML = `
+      <div class="clearance-result clearance-result-APPROVED">
+        <div class="clearance-result-header">
+          <span class="status-pill pill-SAFE">CLEARANCE ISSUED</span>
+          <h3>Departure Approved (${escapeHtml(c.clearanceId)})</h3>
+        </div>
+        <div class="clearance-result-body">
+          <p><strong>${escapeHtml(c.vesselName)}</strong> (${escapeHtml(c.vesselType)}) cleared for voyage along <strong>${escapeHtml((c.routeZoneCodes || []).join(" → "))}</strong>.</p>
+          <p>Status: <span class="${statusPillClass(c.safetyStatus)}">${escapeHtml(formatStatus(c.safetyStatus))}</span> &bull; Risk Score: <strong>${escapeHtml(c.riskScore)}/100</strong> &bull; Departure Timezone: <strong>${escapeHtml(c.departureTimezone || "Local")}</strong> &bull; Issued: <strong>${escapeHtml(c.issuedTimestampLocal)}</strong></p>
+        </div>
+      </div>
+    `;
     await loadClearanceLogs();
   } catch (err) {
     box.classList.remove("hidden");
-    box.className = "callout callout-danger";
-    box.innerHTML = `<strong>⛔ REQUEST FAILED:</strong> Unable to reach the clearance service (${escapeHtml(err.message)}).`;
+    box.innerHTML = `
+      <div class="clearance-result clearance-result-ERROR">
+        <div class="clearance-result-header">
+          <span class="status-pill pill-DO_NOT_SAIL">SERVICE ERROR</span>
+          <h3>Clearance Service Unavailable</h3>
+        </div>
+        <div class="clearance-result-body">
+          <p>Unable to reach the clearance service (${escapeHtml(err.message)}).</p>
+        </div>
+      </div>
+    `;
   } finally {
     state.isSubmittingClearance = false;
     btn.disabled = false;
@@ -1135,10 +1426,14 @@ async function submitClearance() {
 
 async function loadClearanceLogs() {
   const tbody = el("clearanceLogBody");
+  const countBadge = el("clearanceCountBadge");
   try {
     const res = await fetch("/api/clearances");
     const data = await res.json();
     const clearances = data.clearances || [];
+    if (countBadge) {
+      countBadge.textContent = `${clearances.length} record${clearances.length === 1 ? "" : "s"}`;
+    }
     tbody.innerHTML = "";
 
     if (clearances.length === 0) {
@@ -1164,6 +1459,7 @@ async function loadClearanceLogs() {
       tbody.appendChild(tr);
     });
   } catch (err) {
+    if (countBadge) countBadge.textContent = "0 records";
     tbody.innerHTML = `
       <tr class="empty-state-row">
         <td colspan="7">Unable to load clearance logs: ${escapeHtml(err.message)}</td>

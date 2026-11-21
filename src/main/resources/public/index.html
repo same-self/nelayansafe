@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <a href="#mainContent" class="skip-link">Skip to main content</a>
   <header class="topbar">
     <div class="brand">
       <div class="brand-icon" aria-hidden="true">
@@ -33,7 +34,7 @@
     </div>
   </header>
 
-  <main class="container">
+  <main id="mainContent" class="container">
     <!-- Active Storm Simulation Notice Strip -->
     <div id="stormSimBanner" class="sim-banner hidden" role="status">
       <div class="sim-banner-text">
@@ -51,7 +52,7 @@
           <p class="subtitle">Polymorphic BMKG forecast evaluation using official vessel-class safety limits</p>
         </div>
         <div class="vessel-header-controls">
-          <div id="readinessStrip" class="readiness-strip"></div>
+          <div id="readinessStrip" class="readiness-strip" aria-live="polite"></div>
           <button id="toggleProfileBtn" type="button" class="btn btn-secondary btn-sm" aria-expanded="true" aria-controls="vesselCollapsibleBody">
             Hide Inputs
           </button>
@@ -163,15 +164,15 @@
     </section>
 
     <!-- Navigation Tabs -->
-    <nav class="tabs">
-      <button type="button" class="tab-btn active" data-tab="zoneTab">Live Zone and 24h Window</button>
-      <button type="button" class="tab-btn" data-tab="routeTab">Multi-Zone Route Checker</button>
-      <button type="button" class="tab-btn" data-tab="clearanceTab">Harbor Clearance and Logs</button>
-      <button type="button" class="tab-btn" data-tab="rulesTab">BMKG Rules and OOP Reference</button>
+    <nav class="tabs" role="tablist" aria-label="System sections">
+      <button type="button" id="tabBtnZone" class="tab-btn active" role="tab" aria-selected="true" aria-controls="zoneTab" data-tab="zoneTab">Live Zone and 24h Window</button>
+      <button type="button" id="tabBtnRoute" class="tab-btn" role="tab" aria-selected="false" aria-controls="routeTab" tabindex="-1" data-tab="routeTab">Multi-Zone Route Checker</button>
+      <button type="button" id="tabBtnClearance" class="tab-btn" role="tab" aria-selected="false" aria-controls="clearanceTab" tabindex="-1" data-tab="clearanceTab">Harbor Clearance and Logs</button>
+      <button type="button" id="tabBtnRules" class="tab-btn" role="tab" aria-selected="false" aria-controls="rulesTab" tabindex="-1" data-tab="rulesTab">BMKG Rules and OOP Reference</button>
     </nav>
 
     <!-- TAB 1: Live Zone & 24h Departure Optimizer -->
-    <section id="zoneTab" class="tab-content active">
+    <section id="zoneTab" class="tab-content active" role="tabpanel" aria-labelledby="tabBtnZone">
       <div class="card">
         <div class="zone-selector-row">
           <div class="field">
@@ -187,7 +188,7 @@
           </div>
         </div>
 
-        <div id="zoneVerdictBanner" class="verdict-banner verdict-neutral">
+        <div id="zoneVerdictBanner" class="verdict-banner verdict-neutral" aria-live="polite">
           <div class="verdict-main">
             <span id="verdictBadge" class="status-pill pill-NEUTRAL">LOADING</span>
             <h3 id="verdictTitle">Select a sea zone and evaluate safety</h3>
@@ -230,12 +231,12 @@
           <span class="legend-item"><span class="legend-now-tag">NOW</span> Active Forecast Hour</span>
         </div>
         <div id="hourlyChart" class="hourly-chart"></div>
-        <div id="hourlyInspector" class="hourly-inspector muted">Select any hour column above to inspect exact hourly wind, wave, gust, and current metrics.</div>
+        <div id="hourlyInspector" class="hourly-inspector muted" aria-live="polite">Select any hour column above to inspect exact hourly wind, wave, gust, and current metrics.</div>
       </div>
     </section>
 
     <!-- TAB 2: Multi-Zone Route Checker -->
-    <section id="routeTab" class="tab-content">
+    <section id="routeTab" class="tab-content" role="tabpanel" aria-labelledby="tabBtnRoute">
       <div class="card">
         <div class="section-header">
           <div>
@@ -268,7 +269,7 @@
           </div>
         </div>
 
-        <div id="routeSummaryBox" class="verdict-banner verdict-neutral hidden">
+        <div id="routeSummaryBox" class="verdict-banner verdict-neutral hidden" aria-live="polite">
           <div class="verdict-main">
             <span id="routeStatusPill" class="status-pill pill-NEUTRAL">--</span>
             <h3 id="routeSummaryText">--</h3>
@@ -293,7 +294,7 @@
     </section>
 
     <!-- TAB 3: Harbor Clearance Gate & Trip Log -->
-    <section id="clearanceTab" class="tab-content">
+    <section id="clearanceTab" class="tab-content" role="tabpanel" aria-labelledby="tabBtnClearance">
       <div class="card">
         <div class="section-header">
           <div>
@@ -319,6 +320,8 @@
           <p><strong>Recommended Window:</strong> <span id="clrWindowSummary">-</span></p>
         </div>
 
+        <div id="clearanceGuardrails" class="guardrails-grid" aria-label="Pre-departure guardrail checklist"></div>
+
         <label class="caution-ack">
           <input type="checkbox" id="cautionAckCheckbox" />
           <span><strong>Captain Acknowledgment:</strong> If sea status is <code>CAUTION</code>, I confirm crew briefing and extra safety vigilance.</span>
@@ -328,7 +331,7 @@
           <button id="requestClearanceBtn" type="button" class="btn btn-primary">Request Sailing Clearance</button>
         </div>
 
-        <div id="clearanceResultBox" class="hidden"></div>
+        <div id="clearanceResultBox" class="hidden" aria-live="polite"></div>
       </div>
 
       <div class="card">
@@ -337,7 +340,10 @@
             <h2>Issued Sailing Clearances Log</h2>
             <p class="subtitle">Saved persistently on server to <code>data/clearances.json</code> and <code>data/clearances.csv</code></p>
           </div>
-          <a href="/api/clearances/export" class="btn btn-secondary">⬇ Download CSV Log</a>
+          <div class="log-header-actions">
+            <span id="clearanceCountBadge" class="badge badge-neutral">0 records</span>
+            <a href="/api/clearances/export" class="btn btn-secondary">⬇ Download CSV Log</a>
+          </div>
         </div>
 
         <div class="table-wrap">
@@ -360,10 +366,15 @@
     </section>
 
     <!-- TAB 4: Official BMKG Rules & OOP Architecture -->
-    <section id="rulesTab" class="tab-content">
+    <section id="rulesTab" class="tab-content" role="tabpanel" aria-labelledby="tabBtnRules">
       <div class="card">
-        <h2>Official BMKG Vessel Sailing Safety Thresholds</h2>
-        <p class="subtitle">Every wind and wave limit is mapped directly to official BMKG Marine Meteorology guidelines.</p>
+        <div class="section-header">
+          <div>
+            <h2>Official BMKG Vessel Sailing Safety Thresholds</h2>
+            <p class="subtitle">Every wind and wave limit is mapped directly to official BMKG Marine Meteorology guidelines. Your active vessel class is highlighted below.</p>
+          </div>
+          <span id="rulesActiveVesselBadge" class="badge badge-live">Active: SmallFishingBoat</span>
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -376,29 +387,29 @@
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td><code>SmallFishingBoat</code></td>
+              <tr data-vessel-row="SmallFishingBoat">
+                <td><code>SmallFishingBoat</code> <span class="active-class-pill hidden">ACTIVE</span></td>
                 <td>Perahu Nelayan</td>
                 <td>&ge; 15 knots</td>
                 <td>&ge; 1.25 m</td>
                 <td><code>grossTonnage</code>, <code>maxSafeCurrentKnots</code>; wind gust excess, current drift, small-hull vulnerability (&lt;10 GT)</td>
               </tr>
-              <tr>
-                <td><code>BargeVessel</code></td>
+              <tr data-vessel-row="BargeVessel">
+                <td><code>BargeVessel</code> <span class="active-class-pill hidden">ACTIVE</span></td>
                 <td>Kapal Tongkang</td>
                 <td>&ge; 16 knots</td>
                 <td>&ge; 1.50 m</td>
                 <td><code>maxCargoTon</code>, <code>currentCargoTon</code>; current drag, cross-gusts, cargo load ratio + cargo overcapacity gate</td>
               </tr>
-              <tr>
-                <td><code>PassengerFerry</code></td>
+              <tr data-vessel-row="PassengerFerry">
+                <td><code>PassengerFerry</code> <span class="active-class-pill hidden">ACTIVE</span></td>
                 <td>Kapal Ferry</td>
                 <td>&ge; 21 knots</td>
                 <td>&ge; 2.50 m</td>
                 <td><code>maxPassengers</code>, <code>currentPassengers</code>; swell roll stability, occupancy margin, gusts + passenger overcapacity gate</td>
               </tr>
-              <tr>
-                <td><code>CargoShip</code></td>
+              <tr data-vessel-row="CargoShip">
+                <td><code>CargoShip</code> <span class="active-class-pill hidden">ACTIVE</span></td>
                 <td>Kapal Kargo / Pesiar</td>
                 <td>&ge; 27 knots</td>
                 <td>&ge; 4.00 m</td>
@@ -410,14 +421,129 @@
       </div>
 
       <div class="card">
-        <h2>Conservative System Extensions (Decision Rules)</h2>
-        <p class="subtitle">Applied uniformly on top of official BMKG thresholds to prioritize crew safety before departure.</p>
-        <ul class="reason-list" style="margin-top: 0.75rem;">
-          <li><strong>DO_NOT_SAIL (Conservative OR Gate):</strong> Triggered when <code>windSpeed &ge; maxSafeWind</code> <strong>OR</strong> <code>waveHeight &ge; maxSafeWave</code> (stricter than BMKG's combined advisory wording).</li>
-          <li><strong>CAUTION Buffer:</strong> Triggered when wave or wind reaches <strong>&ge; 75%</strong> of the vessel limit, <code>windGust &ge; maxSafeWind</code>, or <code>currentSpeed &ge; 2.0 kt</code>.</li>
-          <li><strong>Polymorphic Risk Score (0 to 100):</strong> <code>min(100, round(85 * max(wind/maxWind, wave/maxWave) + calculateVesselModifier(slot)))</code>, where each subclass computes a <code>0 to 15</code> point modifier.</li>
-          <li><strong>Pre-Departure Custom Exceptions:</strong> <code>VesselOvercapacityException</code> (crew, cargo tons, or passengers), <code>MissingSafetyGearException</code>, <code>UnsafeSeaConditionException</code>, and <code>BmkgApiUnavailableException</code>.</li>
-        </ul>
+        <div class="section-header">
+          <div>
+            <h2>Object-Oriented Architecture (Inheritance and Template Method)</h2>
+            <p class="subtitle">All four vessel classes inherit shared safety logic from the abstract <code>Vessel</code> superclass and override polymorphic scoring and capacity rules.</p>
+          </div>
+        </div>
+
+        <div class="oop-diagram">
+          <div class="oop-parent-box">
+            <div class="oop-stereotype">&laquo;abstract class&raquo;</div>
+            <div class="oop-class-name">Vessel</div>
+            <div class="oop-methods">
+              <span><code>+ calculateRiskScore(slot)</code> (Template Method: 85 base + 0..15 modifier)</span>
+              <span><code># applyStandardBmkgEvaluation(slot, reasons, label)</code> (Shared BMKG rules)</span>
+              <span><code>+ validateEquipmentAndCapacity(crewCount)</code> (Crew + Gear guardrails)</span>
+              <span><code>+ abstract evaluateSafety(slot)</code> &bull; <code># abstract calculateVesselModifier(slot)</code></span>
+            </div>
+          </div>
+
+          <div class="oop-stem" aria-hidden="true"></div>
+
+          <div class="oop-children-grid">
+            <div class="oop-child-box" data-oop-class="SmallFishingBoat">
+              <div class="oop-child-head">
+                <strong>SmallFishingBoat</strong>
+                <span class="active-class-pill hidden">ACTIVE</span>
+              </div>
+              <div class="oop-extends">extends Vessel &bull; 15 kt / 1.25 m</div>
+              <ul class="oop-points">
+                <li>Fields: <code>grossTonnage</code>, <code>maxSafeCurrentKnots</code></li>
+                <li>Modifier: gust excess, current drift, hull &lt; 10 GT</li>
+                <li>Adds tighter boat-specific current caution check</li>
+              </ul>
+            </div>
+
+            <div class="oop-child-box" data-oop-class="BargeVessel">
+              <div class="oop-child-head">
+                <strong>BargeVessel</strong>
+                <span class="active-class-pill hidden">ACTIVE</span>
+              </div>
+              <div class="oop-extends">extends Vessel &bull; 16 kt / 1.50 m</div>
+              <ul class="oop-points">
+                <li>Fields: <code>maxCargoTon</code>, <code>currentCargoTon</code></li>
+                <li>Modifier: current drag, gusts, cargo load ratio</li>
+                <li>Overrides capacity validator for cargo overload</li>
+              </ul>
+            </div>
+
+            <div class="oop-child-box" data-oop-class="PassengerFerry">
+              <div class="oop-child-head">
+                <strong>PassengerFerry</strong>
+                <span class="active-class-pill hidden">ACTIVE</span>
+              </div>
+              <div class="oop-extends">extends Vessel &bull; 21 kt / 2.50 m</div>
+              <ul class="oop-points">
+                <li>Fields: <code>maxPassengers</code>, <code>currentPassengers</code></li>
+                <li>Modifier: wave roll stability, occupancy, gusts</li>
+                <li>Overrides capacity validator for passenger overload</li>
+              </ul>
+            </div>
+
+            <div class="oop-child-box" data-oop-class="CargoShip">
+              <div class="oop-child-head">
+                <strong>CargoShip</strong>
+                <span class="active-class-pill hidden">ACTIVE</span>
+              </div>
+              <div class="oop-extends">extends Vessel &bull; 27 kt / 4.00 m</div>
+              <ul class="oop-points">
+                <li>Field: <code>maxContainerTEU</code></li>
+                <li>Modifier: container stack windage (TEU) and gusts</li>
+                <li>Adds deck lashing advisory during heavy seas</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-header">
+          <div>
+            <h2>Conservative System Extensions (Decision Rules)</h2>
+            <p class="subtitle">Applied uniformly on top of official BMKG thresholds to prioritize crew safety before departure.</p>
+          </div>
+        </div>
+
+        <div class="rules-grid">
+          <div class="rule-card rule-danger">
+            <div class="rule-card-head">
+              <span class="status-pill pill-DO_NOT_SAIL">DO NOT SAIL</span>
+              <strong>Conservative OR Gate</strong>
+            </div>
+            <p>Triggered when <code>windSpeed &ge; maxSafeWind</code> <strong>OR</strong> <code>waveHeight &ge; maxSafeWave</code>. Inclusive limits prevent sailing right at BMKG danger boundaries.</p>
+          </div>
+
+          <div class="rule-card rule-caution">
+            <div class="rule-card-head">
+              <span class="status-pill pill-CAUTION">CAUTION</span>
+              <strong>75% Buffer, Gust and Current Rules</strong>
+            </div>
+            <p>Triggered when wave or wind reaches <strong>&ge; 75%</strong> of the vessel limit, <code>windGust &ge; maxSafeWind</code>, <code>currentSpeed &ge; 2.0 kt</code>, or a fishing boat's tighter current limit.</p>
+          </div>
+
+          <div class="rule-card rule-info">
+            <div class="rule-card-head">
+              <span class="badge badge-neutral">0 to 100 SCALE</span>
+              <strong>Polymorphic Risk Score Formula</strong>
+            </div>
+            <p><code>min(100, round(85 * max(wind/maxWind, wave/maxWave) + calculateVesselModifier(slot)))</code>, combining base BMKG severity (0 to 85 pts) with subclass exposure (0 to 15 pts).</p>
+          </div>
+
+          <div class="rule-card rule-accent">
+            <div class="rule-card-head">
+              <span class="badge badge-neutral">4 CHECKED EXCEPTIONS</span>
+              <strong>Pre-Departure Custom Exceptions</strong>
+            </div>
+            <p class="rule-exception-list">
+              <code>VesselOvercapacityException</code> (crew, cargo, or passengers),
+              <code>MissingSafetyGearException</code> (life jackets or radio),
+              <code>UnsafeSeaConditionException</code> (blocked weather or unacknowledged caution), and
+              <code>BmkgApiUnavailableException</code> (offline with no cache).
+            </p>
+          </div>
+        </div>
       </div>
     </section>
   </main>
