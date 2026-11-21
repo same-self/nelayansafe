@@ -47,7 +47,7 @@ public class RouteAndWindowOptimizer {
         if (!safeWindows.isEmpty()) {
             DepartureWindow best = safeWindows.get(0);
             String msg = String.format(
-                    "Best Safe Departure Window: %s – %s (%d hr%s) • Avg Wave: %.2f m • Avg Wind: %.1f kt • Risk Score: %d/100",
+                    "Best Safe Departure Window: %s to %s (%d hr%s) • Avg Wave: %.2f m • Avg Wind: %.1f kt • Risk Score: %d/100",
                     best.getStartTimeWib(), best.getEndTimeWib(), best.getDurationHours(),
                     best.getDurationHours() > 1 ? "s" : "",
                     best.getAvgWaveHeight(), best.getAvgWindSpeed(), best.getAvgRiskScore());
@@ -57,7 +57,7 @@ public class RouteAndWindowOptimizer {
         if (!cautionWindows.isEmpty()) {
             DepartureWindow bestCaution = cautionWindows.get(0);
             String msg = String.format(
-                    "No fully SAFE hours in next 24h. Lowest-risk CAUTION window: %s – %s (%d hr%s, Avg Wave: %.2f m, Risk Score: %d/100).",
+                    "No fully SAFE hours in next 24h. Lowest-risk CAUTION window: %s to %s (%d hr%s, Avg Wave: %.2f m, Risk Score: %d/100).",
                     bestCaution.getStartTimeWib(), bestCaution.getEndTimeWib(), bestCaution.getDurationHours(),
                     bestCaution.getDurationHours() > 1 ? "s" : "",
                     bestCaution.getAvgWaveHeight(), bestCaution.getAvgRiskScore());
