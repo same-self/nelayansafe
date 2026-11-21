@@ -18,11 +18,11 @@
 
     <div class="topbar-actions">
       <span id="connectionBadge" class="badge badge-neutral">Connecting to BMKG...</span>
-      <label class="toggle-pill" title="Simulate active high-wave storm (1.95-2.45 m, 18-22 kt) followed by a calm recovery window">
+      <label class="toggle-pill" title="Simulate active high-wave storm (1.95 to 2.45 m, 18 to 22 kt) followed by a calm recovery window">
         <input type="checkbox" id="simulateStormToggle" />
         <span>High-Wave Storm Simulation</span>
       </label>
-      <button id="refreshBtn" class="btn btn-secondary">↻ Refresh Live BMKG</button>
+      <button id="refreshBtn" type="button" class="btn btn-secondary">↻ Refresh Live BMKG</button>
     </div>
   </header>
 
@@ -136,10 +136,10 @@
 
     <!-- Navigation Tabs -->
     <nav class="tabs">
-      <button class="tab-btn active" data-tab="zoneTab">Live Zone and 24h Window</button>
-      <button class="tab-btn" data-tab="routeTab">Multi-Zone Route Checker</button>
-      <button class="tab-btn" data-tab="clearanceTab">Harbor Clearance and Logs</button>
-      <button class="tab-btn" data-tab="rulesTab">BMKG Rules and OOP Reference</button>
+      <button type="button" class="tab-btn active" data-tab="zoneTab">Live Zone and 24h Window</button>
+      <button type="button" class="tab-btn" data-tab="routeTab">Multi-Zone Route Checker</button>
+      <button type="button" class="tab-btn" data-tab="clearanceTab">Harbor Clearance and Logs</button>
+      <button type="button" class="tab-btn" data-tab="rulesTab">BMKG Rules and OOP Reference</button>
     </nav>
 
     <!-- TAB 1: Live Zone & 24h Departure Optimizer -->
@@ -155,13 +155,13 @@
             <select id="zoneSelect"></select>
           </div>
           <div class="field align-end">
-            <button id="evaluateZoneBtn" class="btn btn-primary">Evaluate Sea Safety</button>
+            <button id="evaluateZoneBtn" type="button" class="btn btn-primary">Evaluate Sea Safety</button>
           </div>
         </div>
 
         <div id="zoneVerdictBanner" class="verdict-banner verdict-neutral">
           <div>
-            <span id="verdictBadge" class="status-pill">LOADING</span>
+            <span id="verdictBadge" class="status-pill pill-NEUTRAL">LOADING</span>
             <h3 id="verdictTitle">Select a sea zone and evaluate safety</h3>
             <p id="verdictMeta" class="muted"></p>
           </div>
@@ -195,23 +195,37 @@
         <div class="section-header">
           <div>
             <h2>Multi-Zone Route Safety Analyzer</h2>
-            <p class="subtitle">Add 2 to 5 sea zones along your planned voyage. The system identifies the highest-risk bottleneck zone.</p>
+            <p class="subtitle">Add 2 to 5 sea zones along your planned voyage. The system automatically identifies the highest-risk bottleneck zone.</p>
           </div>
-          <button id="addRouteZoneBtn" class="btn btn-secondary">+ Add Selected Zone</button>
+          <span id="routeZoneCount" class="badge badge-neutral">0 zones selected</span>
         </div>
 
-        <div class="route-builder">
+        <div class="route-builder-grid">
+          <div class="field">
+            <label for="routeZoneFilter">Search Sea Zone</label>
+            <input type="text" id="routeZoneFilter" placeholder="Filter by province, name, or code..." />
+          </div>
           <div class="field grow">
             <label for="routeZoneAdder">Pick Sea Zone to Add to Route</label>
-            <select id="routeZoneAdder"></select>
+            <div class="route-adder-row">
+              <select id="routeZoneAdder"></select>
+              <button id="addRouteZoneBtn" type="button" class="btn btn-secondary">+ Add Zone</button>
+            </div>
           </div>
-          <button id="analyzeRouteBtn" class="btn btn-primary">Analyze Multi-Zone Route</button>
         </div>
 
-        <div id="routeZoneChips" class="route-chips"></div>
+        <div class="route-toolbar">
+          <div id="routeZoneChips" class="route-chips"></div>
+          <div class="route-toolbar-actions">
+            <button id="clearRouteBtn" type="button" class="btn btn-secondary">Clear Route</button>
+            <button id="analyzeRouteBtn" type="button" class="btn btn-primary">Analyze Route</button>
+            <button id="useRouteForClearanceBtn" type="button" class="btn btn-secondary">Use Route in Clearance &rarr;</button>
+          </div>
+        </div>
+
         <div id="routeSummaryBox" class="verdict-banner verdict-neutral hidden">
           <div>
-            <span id="routeStatusPill" class="status-pill">--</span>
+            <span id="routeStatusPill" class="status-pill pill-NEUTRAL">--</span>
             <h3 id="routeSummaryText">--</h3>
             <p id="routeBottleneckMeta" class="muted"></p>
           </div>
@@ -230,13 +244,24 @@
         <div class="section-header">
           <div>
             <h2>Departure Clearance Gate (Syahbandar Guardrails)</h2>
-            <p class="subtitle">Enforces crew/cargo/passenger capacity, mandatory safety gear, and BMKG weather rules via Java Custom Exceptions</p>
+            <p class="subtitle">Enforces crew, cargo, and passenger capacity, mandatory safety gear, and BMKG weather rules via Java Custom Exceptions</p>
           </div>
+        </div>
+
+        <div class="scope-selector" role="radiogroup" aria-label="Clearance evaluation scope">
+          <label class="scope-option">
+            <input type="radio" name="clearanceScope" id="scopeActiveZone" value="activeZone" checked />
+            <span id="scopeActiveLabel">Current Sea Zone (Tab 1)</span>
+          </label>
+          <label class="scope-option">
+            <input type="radio" name="clearanceScope" id="scopeMultiZone" value="multiZone" />
+            <span id="scopeMultiLabel">Multi-Zone Route (Tab 2)</span>
+          </label>
         </div>
 
         <div class="clearance-summary">
           <p><strong>Active Vessel:</strong> <span id="clrVesselSummary">-</span></p>
-          <p><strong>Target Route Zones:</strong> <span id="clrRouteSummary">-</span></p>
+          <p><strong>Target Sea Zone(s):</strong> <span id="clrRouteSummary">-</span></p>
           <p><strong>Recommended Window:</strong> <span id="clrWindowSummary">-</span></p>
         </div>
 
@@ -246,7 +271,7 @@
         </label>
 
         <div class="clearance-actions">
-          <button id="requestClearanceBtn" class="btn btn-primary">Request Sailing Clearance</button>
+          <button id="requestClearanceBtn" type="button" class="btn btn-primary">Request Sailing Clearance</button>
         </div>
 
         <div id="clearanceResultBox" class="hidden"></div>
