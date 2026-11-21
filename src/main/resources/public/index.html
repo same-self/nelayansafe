@@ -9,7 +9,14 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <div class="brand-icon">⚓</div>
+      <div class="brand-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="5" r="2.5"></circle>
+          <line x1="12" y1="7.5" x2="12" y2="21"></line>
+          <path d="M5 13H2a10 10 0 0 0 20 0h-3"></path>
+          <line x1="8" y1="10" x2="16" y2="10"></line>
+        </svg>
+      </div>
       <div>
         <h1>Maritime Sailing Safety and Departure Window System</h1>
         <p>Vessel-Specific BMKG Marine Forecast Evaluation, Departure Optimizer, and Harbor Clearance</p>
@@ -27,107 +34,128 @@
   </header>
 
   <main class="container">
+    <!-- Active Storm Simulation Notice Strip -->
+    <div id="stormSimBanner" class="sim-banner hidden" role="status">
+      <div class="sim-banner-text">
+        <span class="badge badge-sim">SIMULATION MODE</span>
+        <span>High-Wave Storm Simulation is active (synthetic 1.95 to 2.45 m waves, 18 to 22 kt winds, followed by a 12-hour calm recovery window). Live BMKG data is paused.</span>
+      </div>
+      <button id="exitStormSimBtn" type="button" class="btn btn-secondary btn-sm">Return to Live BMKG</button>
+    </div>
+
     <!-- Persistent Vessel & Crew Setup Bar -->
     <section class="card vessel-panel">
-      <div class="section-header">
-        <div>
+      <div class="vessel-header">
+        <div class="vessel-header-title">
           <h2>1. Vessel and Safety Gear Profile</h2>
-          <p class="subtitle">Evaluates live BMKG forecasts polymorphically using official vessel-class safety limits</p>
+          <p class="subtitle">Polymorphic BMKG forecast evaluation using official vessel-class safety limits</p>
         </div>
+        <div class="vessel-header-controls">
+          <div id="readinessStrip" class="readiness-strip"></div>
+          <button id="toggleProfileBtn" type="button" class="btn btn-secondary btn-sm" aria-expanded="true" aria-controls="vesselCollapsibleBody">
+            Hide Inputs
+          </button>
+        </div>
+      </div>
+
+      <!-- Shown only when Vessel Profile inputs are collapsed -->
+      <div id="vesselCompactSummary" class="compact-summary hidden"></div>
+
+      <div id="vesselCollapsibleBody" class="vessel-collapsible-body">
         <div class="preset-bar">
           <span class="preset-label">Quick Demo Scenarios:</span>
-          <button type="button" class="btn-chip" data-preset="safe">✓ Safe Fishing Boat</button>
-          <button type="button" class="btn-chip" data-preset="overcapacity">⚠ Overcapacity Test</button>
-          <button type="button" class="btn-chip" data-preset="missingGear">⚠ Missing Gear (KM Maritim Case)</button>
-          <button type="button" class="btn-chip" data-preset="storm">⛔ High-Wave Storm Test</button>
+          <button type="button" class="btn-chip" data-preset="safe">Safe Fishing Boat</button>
+          <button type="button" class="btn-chip" data-preset="overcapacity">Overcapacity Test</button>
+          <button type="button" class="btn-chip" data-preset="missingGear">Missing Gear (KM Maritim Case)</button>
+          <button type="button" class="btn-chip" data-preset="storm">High-Wave Storm Test</button>
         </div>
-      </div>
 
-      <div class="vessel-grid">
-        <div class="field">
-          <label for="vesselType">Vessel Class</label>
-          <select id="vesselType">
-            <option value="SmallFishingBoat">Small Fishing Boat (&ge;15 kt / &ge;1.25 m)</option>
-            <option value="BargeVessel">Barge Vessel (&ge;16 kt / &ge;1.50 m)</option>
-            <option value="PassengerFerry">Passenger Ferry (&ge;21 kt / &ge;2.50 m)</option>
-            <option value="CargoShip">Cargo / Cruise Ship (&ge;27 kt / &ge;4.00 m)</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="vesselName">Vessel Name</label>
-          <input type="text" id="vesselName" value="KM Nelayan Sejahtera" />
-        </div>
-        <div class="field">
-          <label for="vesselId">Vessel ID</label>
-          <input type="text" id="vesselId" value="VSL-001" />
-        </div>
-        <div class="field">
-          <label for="maxCrew">Max Crew Capacity</label>
-          <input type="number" id="maxCrew" min="1" value="6" />
-        </div>
-        <div class="field">
-          <label for="crewCount">Crew Onboard</label>
-          <input type="number" id="crewCount" min="1" value="4" />
-        </div>
-        <div class="field gear-checks">
-          <label>Mandatory Safety Gear</label>
-          <div class="check-row">
-            <label><input type="checkbox" id="hasLifeJackets" checked /> Life Jackets</label>
-            <label><input type="checkbox" id="hasWorkingRadio" checked /> Marine Radio</label>
+        <div class="vessel-grid">
+          <div class="field">
+            <label for="vesselType">Vessel Class</label>
+            <select id="vesselType">
+              <option value="SmallFishingBoat">Small Fishing Boat (&ge;15 kt / &ge;1.25 m)</option>
+              <option value="BargeVessel">Barge Vessel (&ge;16 kt / &ge;1.50 m)</option>
+              <option value="PassengerFerry">Passenger Ferry (&ge;21 kt / &ge;2.50 m)</option>
+              <option value="CargoShip">Cargo / Cruise Ship (&ge;27 kt / &ge;4.00 m)</option>
+            </select>
           </div>
-        </div>
-      </div>
-
-      <!-- Dynamic Subclass-Specific Attributes (UML Polymorphism Specs) -->
-      <div class="subclass-specs-wrap">
-        <div id="specsSmallFishingBoat" class="subclass-spec-block">
-          <div class="subclass-spec-tag">SmallFishingBoat Specific Attributes</div>
-          <div class="subclass-spec-group">
-            <div class="field">
-              <label for="grossTonnage">Gross Tonnage (GT)</label>
-              <input type="number" id="grossTonnage" min="0.5" step="0.5" value="5.0" />
-            </div>
-            <div class="field">
-              <label for="maxSafeCurrentKnots">Max Safe Current (knots)</label>
-              <input type="number" id="maxSafeCurrentKnots" min="0.5" max="5.0" step="0.1" value="2.0" />
+          <div class="field">
+            <label for="vesselName">Vessel Name</label>
+            <input type="text" id="vesselName" value="KM Nelayan Sejahtera" />
+          </div>
+          <div class="field">
+            <label for="vesselId">Vessel ID</label>
+            <input type="text" id="vesselId" value="VSL-001" />
+          </div>
+          <div class="field">
+            <label for="maxCrew">Max Crew</label>
+            <input type="number" id="maxCrew" min="1" value="6" />
+          </div>
+          <div class="field">
+            <label for="crewCount">Crew Onboard</label>
+            <input type="number" id="crewCount" min="1" value="4" />
+          </div>
+          <div class="field gear-checks" id="gearChecksField">
+            <label>Mandatory Safety Gear</label>
+            <div class="check-row">
+              <label id="lifeJacketLabel"><input type="checkbox" id="hasLifeJackets" checked /> Life Jackets</label>
+              <label id="radioLabel"><input type="checkbox" id="hasWorkingRadio" checked /> Marine Radio</label>
             </div>
           </div>
         </div>
 
-        <div id="specsBargeVessel" class="subclass-spec-block hidden">
-          <div class="subclass-spec-tag">BargeVessel Specific Attributes (Enforces Cargo Capacity Limit)</div>
-          <div class="subclass-spec-group">
-            <div class="field">
-              <label for="maxCargoTon">Max Cargo Capacity (Tons)</label>
-              <input type="number" id="maxCargoTon" min="1" step="100" value="3000" />
-            </div>
-            <div class="field">
-              <label for="currentCargoTon">Current Cargo Load (Tons)</label>
-              <input type="number" id="currentCargoTon" min="0" step="100" value="2000" />
-            </div>
-          </div>
-        </div>
-
-        <div id="specsPassengerFerry" class="subclass-spec-block hidden">
-          <div class="subclass-spec-tag">PassengerFerry Specific Attributes (Enforces Passenger Capacity Limit)</div>
-          <div class="subclass-spec-group">
-            <div class="field">
-              <label for="maxPassengers">Max Passenger Capacity</label>
-              <input type="number" id="maxPassengers" min="1" value="300" />
-            </div>
-            <div class="field">
-              <label for="currentPassengers">Current Passengers Onboard</label>
-              <input type="number" id="currentPassengers" min="0" value="180" />
+        <!-- Dynamic Subclass-Specific Attributes (UML Polymorphism Specs) -->
+        <div class="subclass-specs-wrap">
+          <div id="specsSmallFishingBoat" class="subclass-spec-block">
+            <div class="subclass-spec-tag">SmallFishingBoat Attributes</div>
+            <div class="subclass-spec-group">
+              <div class="field field-inline">
+                <label for="grossTonnage">Gross Tonnage (GT)</label>
+                <input type="number" id="grossTonnage" min="0.5" step="0.5" value="5.0" />
+              </div>
+              <div class="field field-inline">
+                <label for="maxSafeCurrentKnots">Max Safe Current (kt)</label>
+                <input type="number" id="maxSafeCurrentKnots" min="0.5" max="5.0" step="0.1" value="2.0" />
+              </div>
             </div>
           </div>
-        </div>
 
-        <div id="specsCargoShip" class="subclass-spec-block hidden">
-          <div class="subclass-spec-tag">CargoShip Specific Attributes</div>
-          <div class="subclass-spec-group">
-            <div class="field">
-              <label for="maxContainerTEU">Max Container Capacity (TEU)</label>
-              <input type="number" id="maxContainerTEU" min="1" step="50" value="1200" />
+          <div id="specsBargeVessel" class="subclass-spec-block hidden">
+            <div class="subclass-spec-tag">BargeVessel Attributes (Cargo Capacity Gate)</div>
+            <div class="subclass-spec-group">
+              <div class="field field-inline">
+                <label for="maxCargoTon">Max Cargo (Tons)</label>
+                <input type="number" id="maxCargoTon" min="1" step="100" value="3000" />
+              </div>
+              <div class="field field-inline">
+                <label for="currentCargoTon">Current Cargo (Tons)</label>
+                <input type="number" id="currentCargoTon" min="0" step="100" value="2000" />
+              </div>
+            </div>
+          </div>
+
+          <div id="specsPassengerFerry" class="subclass-spec-block hidden">
+            <div class="subclass-spec-tag">PassengerFerry Attributes (Passenger Capacity Gate)</div>
+            <div class="subclass-spec-group">
+              <div class="field field-inline">
+                <label for="maxPassengers">Max Passengers</label>
+                <input type="number" id="maxPassengers" min="1" value="300" />
+              </div>
+              <div class="field field-inline">
+                <label for="currentPassengers">Passengers Onboard</label>
+                <input type="number" id="currentPassengers" min="0" value="180" />
+              </div>
+            </div>
+          </div>
+
+          <div id="specsCargoShip" class="subclass-spec-block hidden">
+            <div class="subclass-spec-tag">CargoShip Attributes</div>
+            <div class="subclass-spec-group">
+              <div class="field field-inline">
+                <label for="maxContainerTEU">Max Containers (TEU)</label>
+                <input type="number" id="maxContainerTEU" min="1" step="50" value="1200" />
+              </div>
             </div>
           </div>
         </div>
@@ -160,14 +188,23 @@
         </div>
 
         <div id="zoneVerdictBanner" class="verdict-banner verdict-neutral">
-          <div>
+          <div class="verdict-main">
             <span id="verdictBadge" class="status-pill pill-NEUTRAL">LOADING</span>
             <h3 id="verdictTitle">Select a sea zone and evaluate safety</h3>
-            <p id="verdictMeta" class="muted"></p>
+            <div id="verdictMeta" class="meta-chips"></div>
           </div>
-          <div class="risk-box">
+          <div id="verdictGaugeWrap" class="risk-box">
+            <div class="risk-gauge">
+              <svg class="risk-gauge-svg" viewBox="0 0 84 84" aria-hidden="true">
+                <circle class="gauge-track" cx="42" cy="42" r="34"></circle>
+                <circle class="gauge-arc gauge-arc-NEUTRAL" cx="42" cy="42" r="34" stroke-dasharray="213.63" stroke-dashoffset="213.63"></circle>
+              </svg>
+              <div class="risk-gauge-center">
+                <strong id="verdictScore">--</strong>
+                <small>/100</small>
+              </div>
+            </div>
             <span class="risk-label">Risk Score</span>
-            <strong id="verdictScore">--</strong><small>/100</small>
           </div>
         </div>
 
@@ -224,14 +261,23 @@
         </div>
 
         <div id="routeSummaryBox" class="verdict-banner verdict-neutral hidden">
-          <div>
+          <div class="verdict-main">
             <span id="routeStatusPill" class="status-pill pill-NEUTRAL">--</span>
             <h3 id="routeSummaryText">--</h3>
             <p id="routeBottleneckMeta" class="muted"></p>
           </div>
-          <div class="risk-box">
+          <div id="routeGaugeWrap" class="risk-box">
+            <div class="risk-gauge">
+              <svg class="risk-gauge-svg" viewBox="0 0 84 84" aria-hidden="true">
+                <circle class="gauge-track" cx="42" cy="42" r="34"></circle>
+                <circle class="gauge-arc gauge-arc-NEUTRAL" cx="42" cy="42" r="34" stroke-dasharray="213.63" stroke-dashoffset="213.63"></circle>
+              </svg>
+              <div class="risk-gauge-center">
+                <strong id="routePeakScore">--</strong>
+                <small>/100</small>
+              </div>
+            </div>
             <span class="risk-label">Bottleneck Risk</span>
-            <strong id="routePeakScore">--</strong><small>/100</small>
           </div>
         </div>
         <div id="routeSegmentsGrid" class="route-segments"></div>

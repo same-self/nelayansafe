@@ -5,6 +5,8 @@ const state = {
   zoneNamesByCode: {},
   zoneProvinceByCode: {},
   clearanceScope: "activeZone",
+  activePreset: null,
+  profileCollapsed: false,
   lastRecommendedWindow: "Immediate window checked",
   lastEvalData: null,
   lastRouteData: null,
@@ -19,6 +21,15 @@ const VESSEL_DEFAULTS = {
   BargeVessel: 12,
   PassengerFerry: 150,
   CargoShip: 40
+};
+
+const METRIC_ICONS = {
+  wave: `<svg class="metric-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12c2-2.5 4-2.5 6 0s4 2.5 6 0 4-2.5 6 0"/><path d="M2 17c2-2.5 4-2.5 6 0s4 2.5 6 0 4-2.5 6 0"/></svg>`,
+  wind: `<svg class="metric-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/></svg>`,
+  gust: `<svg class="metric-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`,
+  current: `<svg class="metric-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>`,
+  weather: `<svg class="metric-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`,
+  temp: `<svg class="metric-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>`
 };
 
 const el = (id) => document.getElementById(id);
@@ -50,10 +61,40 @@ function parseNumberInput(id, fallback) {
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
+function renderRiskGaugeHtml(score, status, scoreId, label) {
+  const numeric = typeof score === "number" && !Number.isNaN(score)
+    ? Math.max(0, Math.min(100, score))
+    : null;
+  const radius = 34;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = numeric === null ? circumference : circumference * (1 - numeric / 100);
+  const strokeClass = (status === "SAFE" || status === "CAUTION" || status === "DO_NOT_SAIL")
+    ? `gauge-arc-${status}`
+    : "gauge-arc-NEUTRAL";
+
+  return `
+    <div class="risk-gauge">
+      <svg class="risk-gauge-svg" viewBox="0 0 84 84" aria-hidden="true">
+        <circle class="gauge-track" cx="42" cy="42" r="${radius}"></circle>
+        <circle class="gauge-arc ${strokeClass}" cx="42" cy="42" r="${radius}"
+          stroke-dasharray="${circumference.toFixed(2)}"
+          stroke-dashoffset="${dashOffset.toFixed(2)}"></circle>
+      </svg>
+      <div class="risk-gauge-center">
+        <strong id="${escapeHtml(scoreId)}">${numeric === null ? "--" : escapeHtml(numeric)}</strong>
+        <small>/100</small>
+      </div>
+    </div>
+    <span class="risk-label">${escapeHtml(label)}</span>
+  `;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   bindTabs();
   bindEvents();
   toggleSubclassSpecFields(el("vesselType").value);
+  updateStormSimulationBanner();
+  updateReadinessAndCompactSummary();
   await loadZoneCatalog(false);
   await evaluateActiveZone(false);
   await loadClearanceLogs();
@@ -97,8 +138,77 @@ function toggleSubclassSpecFields(vesselType) {
   if (activeId) el(activeId)?.classList.remove("hidden");
 }
 
+function setActivePreset(presetName) {
+  state.activePreset = presetName;
+  document.querySelectorAll(".btn-chip").forEach((btn) => {
+    btn.classList.toggle("active-preset", Boolean(presetName) && btn.dataset.preset === presetName);
+  });
+}
+
+function updateStormSimulationBanner() {
+  const isSim = el("simulateStormToggle").checked;
+  el("stormSimBanner").classList.toggle("hidden", !isSim);
+}
+
+function updateReadinessAndCompactSummary() {
+  const v = getVesselParams();
+  const warnings = [];
+
+  const crewInvalid = v.crewCount <= 0 || v.maxCrew <= 0;
+  const crewOverloaded = v.crewCount > v.maxCrew;
+  const cargoOverloaded = v.vesselType === "BargeVessel" && v.currentCargoTon > v.maxCargoTon;
+  const paxOverloaded = v.vesselType === "PassengerFerry" && v.currentPassengers > v.maxPassengers;
+
+  if (crewInvalid) {
+    warnings.push("Invalid crew value (triggers IllegalArgumentException)");
+  } else if (crewOverloaded) {
+    warnings.push(`Crew Overcapacity: ${v.crewCount}/${v.maxCrew} (VesselOvercapacityException)`);
+  }
+  if (cargoOverloaded) {
+    warnings.push(`Cargo Overcapacity: ${v.currentCargoTon}/${v.maxCargoTon} t (VesselOvercapacityException)`);
+  }
+  if (paxOverloaded) {
+    warnings.push(`Passenger Overcapacity: ${v.currentPassengers}/${v.maxPassengers} (VesselOvercapacityException)`);
+  }
+  if (!v.lifeJackets && !v.radio) {
+    warnings.push("Missing Life Jackets and Radio (MissingSafetyGearException)");
+  } else if (!v.lifeJackets) {
+    warnings.push("Missing Life Jackets (MissingSafetyGearException)");
+  } else if (!v.radio) {
+    warnings.push("Missing Marine Radio (MissingSafetyGearException)");
+  }
+
+  // Non-blocking field warning highlights
+  el("crewCount").classList.toggle("input-warning", crewInvalid || crewOverloaded);
+  el("maxCrew").classList.toggle("input-warning", v.maxCrew <= 0);
+  el("currentCargoTon").classList.toggle("input-warning", cargoOverloaded);
+  el("currentPassengers").classList.toggle("input-warning", paxOverloaded);
+  el("lifeJacketLabel").classList.toggle("label-warning", !v.lifeJackets);
+  el("radioLabel").classList.toggle("label-warning", !v.radio);
+
+  const strip = el("readinessStrip");
+  if (warnings.length === 0) {
+    strip.innerHTML = `<span class="readiness-pill readiness-ok">Capacity and Gear Ready</span>`;
+  } else {
+    strip.innerHTML = warnings
+      .map((w) => `<span class="readiness-pill readiness-warn">⚠ ${escapeHtml(w)}</span>`)
+      .join("");
+  }
+
+  el("vesselCompactSummary").innerHTML = `
+    <span><strong>${escapeHtml(v.vesselName)}</strong> (${escapeHtml(v.vesselType)}, ${escapeHtml(v.vesselId)})</span>
+    <span>Crew: <strong>${escapeHtml(v.crewCount)}/${escapeHtml(v.maxCrew)}</strong></span>
+    <span>${escapeHtml(formatSubclassDetail(v))}</span>
+    <span>Life Jackets: <strong>${v.lifeJackets ? "OK" : "MISSING"}</strong></span>
+    <span>Radio: <strong>${v.radio ? "OK" : "MISSING"}</strong></span>
+  `;
+}
+
 function handleProfileEvaluationChange() {
+  setActivePreset(null);
   state.routeDirty = true;
+  updateStormSimulationBanner();
+  updateReadinessAndCompactSummary();
   evaluateActiveZone(false);
   if (el("routeTab").classList.contains("active") && state.routeCodes.length > 0) {
     analyzeRoute(false);
@@ -107,6 +217,19 @@ function handleProfileEvaluationChange() {
 }
 
 function bindEvents() {
+  el("toggleProfileBtn").addEventListener("click", () => {
+    state.profileCollapsed = !state.profileCollapsed;
+    el("vesselCollapsibleBody").classList.toggle("hidden", state.profileCollapsed);
+    el("vesselCompactSummary").classList.toggle("hidden", !state.profileCollapsed);
+    el("toggleProfileBtn").textContent = state.profileCollapsed ? "Edit Profile" : "Hide Inputs";
+    el("toggleProfileBtn").setAttribute("aria-expanded", String(!state.profileCollapsed));
+  });
+
+  el("exitStormSimBtn").addEventListener("click", () => {
+    el("simulateStormToggle").checked = false;
+    handleProfileEvaluationChange();
+  });
+
   el("vesselType").addEventListener("change", () => {
     const type = el("vesselType").value;
     el("maxCrew").value = VESSEL_DEFAULTS[type] || 6;
@@ -114,8 +237,24 @@ function bindEvents() {
     handleProfileEvaluationChange();
   });
 
-  ["vesselName", "vesselId", "maxCrew", "crewCount", "hasLifeJackets", "hasWorkingRadio"].forEach((id) => {
-    el(id).addEventListener("change", updateClearanceSummary);
+  ["vesselName", "vesselId", "maxCrew", "crewCount"].forEach((id) => {
+    el(id).addEventListener("input", () => {
+      setActivePreset(null);
+      updateReadinessAndCompactSummary();
+      updateClearanceSummary();
+    });
+    el(id).addEventListener("change", () => {
+      updateReadinessAndCompactSummary();
+      updateClearanceSummary();
+    });
+  });
+
+  ["hasLifeJackets", "hasWorkingRadio"].forEach((id) => {
+    el(id).addEventListener("change", () => {
+      setActivePreset(null);
+      updateReadinessAndCompactSummary();
+      updateClearanceSummary();
+    });
   });
 
   [
@@ -127,6 +266,11 @@ function bindEvents() {
     "currentPassengers",
     "maxContainerTEU"
   ].forEach((id) => {
+    el(id).addEventListener("input", () => {
+      setActivePreset(null);
+      updateReadinessAndCompactSummary();
+      updateClearanceSummary();
+    });
     el(id).addEventListener("change", handleProfileEvaluationChange);
   });
 
@@ -233,6 +377,11 @@ function getVesselParams() {
 async function applyScenarioPreset(preset) {
   el("grossTonnage").value = 5.0;
   el("maxSafeCurrentKnots").value = 2.0;
+  el("maxCargoTon").value = 3000;
+  el("currentCargoTon").value = 2000;
+  el("maxPassengers").value = 300;
+  el("currentPassengers").value = 180;
+  el("maxContainerTEU").value = 1200;
 
   if (preset === "safe") {
     el("vesselType").value = "SmallFishingBoat";
@@ -268,7 +417,10 @@ async function applyScenarioPreset(preset) {
     el("simulateStormToggle").checked = true;
   }
 
+  setActivePreset(preset);
   toggleSubclassSpecFields(el("vesselType").value);
+  updateStormSimulationBanner();
+  updateReadinessAndCompactSummary();
   el("cautionAckCheckbox").checked = false;
   el("clearanceResultBox").classList.add("hidden");
   state.routeDirty = true;
@@ -443,8 +595,8 @@ async function evaluateActiveZone(refresh) {
     el("verdictBadge").className = "status-pill pill-DO_NOT_SAIL";
     el("verdictBadge").textContent = "ERROR";
     el("verdictTitle").textContent = `Unable to load forecast: ${err.message}`;
-    el("verdictMeta").textContent = "Check BMKG API availability or vessel input values.";
-    el("verdictScore").textContent = "--";
+    el("verdictMeta").innerHTML = `<span class="meta-chip">Check BMKG API availability or vessel input values.</span>`;
+    el("verdictGaugeWrap").innerHTML = renderRiskGaugeHtml(null, "DO_NOT_SAIL", "verdictScore", "Risk Score");
   } finally {
     if (reqId === state.evalRequestSeq) {
       evalBtn.disabled = false;
@@ -470,6 +622,12 @@ function updateConnectionBadge(mode) {
   }
 }
 
+function metricStateTagText(level) {
+  if (level === "DO_NOT_SAIL") return "LIMIT EXCEEDED";
+  if (level === "CAUTION") return "CAUTION";
+  return "OK";
+}
+
 function renderZoneVerdict(zone, slot, evalObj) {
   const banner = el("zoneVerdictBanner");
   banner.className = `verdict-banner verdict-${evalObj.status}`;
@@ -479,9 +637,20 @@ function renderZoneVerdict(zone, slot, evalObj) {
   badge.textContent = formatStatus(evalObj.status);
 
   el("verdictTitle").textContent = `${zone.areaName} (${zone.areaCode}): ${evalObj.summary}`;
-  el("verdictMeta").textContent =
-    `Station: ${zone.stationName} • Timezone: ${zone.timezoneLabel || "Local"} • Slot: ${slot.timeLocal} (${slot.timeUtc}) • Limits: Wind < ${evalObj.maxSafeWindKnots} kt, Wave < ${evalObj.maxSafeWaveMeters} m`;
-  el("verdictScore").textContent = evalObj.riskScore;
+
+  el("verdictMeta").innerHTML = `
+    <span class="meta-chip"><strong>Station:</strong> ${escapeHtml(zone.stationName)}</span>
+    <span class="meta-chip"><strong>Timezone:</strong> ${escapeHtml(zone.timezoneLabel || "Local")}</span>
+    <span class="meta-chip"><strong>Slot:</strong> ${escapeHtml(slot.timeLocal)} (${escapeHtml(slot.timeUtc)})</span>
+    <span class="meta-chip"><strong>BMKG Limits:</strong> Wind &lt; ${escapeHtml(evalObj.maxSafeWindKnots)} kt, Wave &lt; ${escapeHtml(evalObj.maxSafeWaveMeters)} m</span>
+  `;
+
+  el("verdictGaugeWrap").innerHTML = renderRiskGaugeHtml(
+    Number(evalObj.riskScore),
+    evalObj.status,
+    "verdictScore",
+    "Risk Score"
+  );
 
   const list = el("verdictReasons");
   list.innerHTML = "";
@@ -491,13 +660,98 @@ function renderZoneVerdict(zone, slot, evalObj) {
     list.appendChild(li);
   });
 
+  renderMetricCards(zone, slot, evalObj);
+}
+
+function renderMetricCards(zone, slot, evalObj) {
+  const v = getVesselParams();
+  const wave = Number(slot.waveHeight);
+  const wind = Number(slot.windSpeed);
+  const gust = Number(slot.windGust);
+  const current = Number(slot.currentSpeed);
+  const maxWave = Number(evalObj.maxSafeWaveMeters) || 1.25;
+  const maxWind = Number(evalObj.maxSafeWindKnots) || 15.0;
+  const boatCurrentLimit = v.maxSafeCurrentKnots > 0 ? v.maxSafeCurrentKnots : 2.0;
+  const currentLimit = evalObj.vesselType === "SmallFishingBoat" ? Math.min(2.0, boatCurrentLimit) : 2.0;
+
+  const wavePct = Math.round((wave / maxWave) * 100);
+  const waveLevel = wave >= maxWave ? "DO_NOT_SAIL" : (wave >= maxWave * 0.75 ? "CAUTION" : "SAFE");
+
+  const windPct = Math.round((wind / maxWind) * 100);
+  const windLevel = wind >= maxWind ? "DO_NOT_SAIL" : (wind >= maxWind * 0.75 ? "CAUTION" : "SAFE");
+
+  const gustPct = Math.round((gust / maxWind) * 100);
+  const gustLevel = gust >= maxWind ? "CAUTION" : "SAFE";
+
+  const currentPct = Math.round((current / currentLimit) * 100);
+  const currentLevel = current >= currentLimit ? "CAUTION" : "SAFE";
+
   el("metricsGrid").innerHTML = `
-    <div class="metric-card"><span>Wave Height</span><strong>${Number(slot.waveHeight).toFixed(2)} m</strong><small>Category: ${escapeHtml(slot.waveCat)}</small></div>
-    <div class="metric-card"><span>Wind Speed</span><strong>${Number(slot.windSpeed).toFixed(1)} kt</strong><small>From: ${escapeHtml(slot.windFrom)}</small></div>
-    <div class="metric-card"><span>Wind Gust</span><strong>${Number(slot.windGust).toFixed(1)} kt</strong><small>Peak sudden gust</small></div>
-    <div class="metric-card"><span>Surface Current</span><strong>${Number(slot.currentSpeed).toFixed(2)} kt</strong><small>Heading: ${escapeHtml(slot.currentTo)}</small></div>
-    <div class="metric-card"><span>Weather Condition</span><strong>${escapeHtml(slot.weather)}</strong><small>BMKG Hourly Slot</small></div>
-    <div class="metric-card"><span>Air Temp / Humidity</span><strong>${escapeHtml(slot.tempAvg)}°C / ${escapeHtml(slot.rhAvg)}%</strong><small>Updated: ${escapeHtml(zone.fetchedAtLocal)}</small></div>
+    <div class="metric-card metric-${waveLevel}">
+      <div class="metric-head">
+        <span class="metric-title">${METRIC_ICONS.wave} Wave Height</span>
+        <span class="metric-state-tag metric-tag-${waveLevel}">${metricStateTagText(waveLevel)}</span>
+      </div>
+      <strong class="metric-value">${wave.toFixed(2)} m</strong>
+      <div class="metric-bar-wrap" title="${wavePct}% of ${maxWave.toFixed(2)} m vessel limit">
+        <div class="metric-bar-fill fill-${waveLevel}" style="width: ${Math.min(100, wavePct)}%"></div>
+        <div class="threshold-mark" title="75% Caution threshold"></div>
+      </div>
+      <small class="metric-sub">${wavePct}% of ${maxWave.toFixed(2)} m limit • Category: ${escapeHtml(slot.waveCat)}</small>
+    </div>
+
+    <div class="metric-card metric-${windLevel}">
+      <div class="metric-head">
+        <span class="metric-title">${METRIC_ICONS.wind} Wind Speed</span>
+        <span class="metric-state-tag metric-tag-${windLevel}">${metricStateTagText(windLevel)}</span>
+      </div>
+      <strong class="metric-value">${wind.toFixed(1)} kt</strong>
+      <div class="metric-bar-wrap" title="${windPct}% of ${maxWind.toFixed(1)} kt vessel limit">
+        <div class="metric-bar-fill fill-${windLevel}" style="width: ${Math.min(100, windPct)}%"></div>
+        <div class="threshold-mark" title="75% Caution threshold"></div>
+      </div>
+      <small class="metric-sub">${windPct}% of ${maxWind.toFixed(1)} kt limit • From: ${escapeHtml(slot.windFrom)}</small>
+    </div>
+
+    <div class="metric-card metric-${gustLevel}">
+      <div class="metric-head">
+        <span class="metric-title">${METRIC_ICONS.gust} Wind Gust</span>
+        <span class="metric-state-tag metric-tag-${gustLevel}">${metricStateTagText(gustLevel)}</span>
+      </div>
+      <strong class="metric-value">${gust.toFixed(1)} kt</strong>
+      <div class="metric-bar-wrap" title="${gustPct}% of ${maxWind.toFixed(1)} kt gust caution limit">
+        <div class="metric-bar-fill fill-${gustLevel}" style="width: ${Math.min(100, gustPct)}%"></div>
+      </div>
+      <small class="metric-sub">Caution at &ge; ${maxWind.toFixed(1)} kt • Peak sudden gust</small>
+    </div>
+
+    <div class="metric-card metric-${currentLevel}">
+      <div class="metric-head">
+        <span class="metric-title">${METRIC_ICONS.current} Surface Current</span>
+        <span class="metric-state-tag metric-tag-${currentLevel}">${metricStateTagText(currentLevel)}</span>
+      </div>
+      <strong class="metric-value">${current.toFixed(2)} kt</strong>
+      <div class="metric-bar-wrap" title="${currentPct}% of ${currentLimit.toFixed(2)} kt current caution limit">
+        <div class="metric-bar-fill fill-${currentLevel}" style="width: ${Math.min(100, currentPct)}%"></div>
+      </div>
+      <small class="metric-sub">Caution at &ge; ${currentLimit.toFixed(2)} kt • Heading: ${escapeHtml(slot.currentTo)}</small>
+    </div>
+
+    <div class="metric-card metric-INFO">
+      <div class="metric-head">
+        <span class="metric-title">${METRIC_ICONS.weather} Weather Condition</span>
+      </div>
+      <strong class="metric-value">${escapeHtml(slot.weather)}</strong>
+      <small class="metric-sub">BMKG Hourly Forecast Slot</small>
+    </div>
+
+    <div class="metric-card metric-INFO">
+      <div class="metric-head">
+        <span class="metric-title">${METRIC_ICONS.temp} Air Temp and Humidity</span>
+      </div>
+      <strong class="metric-value">${escapeHtml(slot.tempAvg)}°C / ${escapeHtml(slot.rhAvg)}%</strong>
+      <small class="metric-sub">Updated: ${escapeHtml(zone.fetchedAtLocal)}</small>
+    </div>
   `;
 }
 
@@ -635,7 +889,12 @@ async function analyzeRoute(forceRefresh = false) {
 
     el("routeSummaryText").textContent = re.summary;
     el("routeBottleneckMeta").textContent = `Bottleneck Zone: ${re.bottleneckAreaName} (${re.bottleneckAreaCode})`;
-    el("routePeakScore").textContent = re.highestRiskScore;
+    el("routeGaugeWrap").innerHTML = renderRiskGaugeHtml(
+      Number(re.highestRiskScore),
+      re.overallStatus,
+      "routePeakScore",
+      "Bottleneck Risk"
+    );
 
     grid.innerHTML = "";
     (re.segments || []).forEach((seg, i) => {
@@ -668,7 +927,7 @@ async function analyzeRoute(forceRefresh = false) {
     el("routeStatusPill").textContent = "ERROR";
     el("routeSummaryText").textContent = `Route evaluation failed: ${err.message}`;
     el("routeBottleneckMeta").textContent = "";
-    el("routePeakScore").textContent = "--";
+    el("routeGaugeWrap").innerHTML = renderRiskGaugeHtml(null, "DO_NOT_SAIL", "routePeakScore", "Bottleneck Risk");
   } finally {
     if (reqId === state.routeRequestSeq) {
       btn.disabled = state.routeCodes.length === 0;
