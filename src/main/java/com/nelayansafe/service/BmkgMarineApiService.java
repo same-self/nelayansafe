@@ -30,21 +30,31 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class BmkgMarineApiService {
-    private static final String BASE_URL = "https://maritim.bmkg.go.id/marine2026-data";
+    public static final String DEFAULT_BASE_URL = "https://maritim.bmkg.go.id/marine2026-data";
+    private static final long CATALOG_CACHE_TTL_MINUTES = 360L; // 6 hours
+    private static final long FORECAST_CACHE_TTL_MINUTES = 15L; // 15 minutes
     private static final DateTimeFormatter BMKG_TIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'");
 
     private final HttpClient httpClient;
+    private final String baseUrl;
     private final Path cacheDir;
+    private final boolean allowClasspathFallback;
     private final Map<String, SeaZone> indexByCode = new ConcurrentHashMap<>();
 
     public BmkgMarineApiService() {
+        this(DEFAULT_BASE_URL, Path.of("cache"), true);
+    }
+
+    public BmkgMarineApiService(String baseUrl, Path cacheDir, boolean allowClasspathFallback) {
+        this.baseUrl = (baseUrl == null || baseUrl.isBlank()) ? DEFAULT_BASE_URL : baseUrl.replaceAll("/+$", "");
+        this.cacheDir = cacheDir != null ? cacheDir : Path.of("cache");
+        this.allowClasspathFallback = allowClasspathFallback;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
-        this.cacheDir = Path.of("cache");
         try {
-            Files.createDirectories(cacheDir);
+            Files.createDirectories(this.cacheDir);
         } catch (IOException ignored) {
         }
     }
@@ -53,43 +63,53 @@ public class BmkgMarineApiService {
     public record ProvinceGroup(String province, List<SeaZone> areas) {}
 
     public ZoneCatalog fetchZoneCatalog(boolean forceRefresh) throws BmkgApiUnavailableException {
+        Path diskCache = cacheDir.resolve("area_province.json");
         String rawJson = null;
         String mode = "LIVE_BMKG";
-        Path diskCache = cacheDir.resolve("area_province.json");
 
-        if (!forceRefresh && Files.exists(diskCache) && !isDiskCacheStale(diskCache)) {
-            try {
-                rawJson = Files.readString(diskCache, StandardCharsets.UTF_8);
-                mode = "DISK_CACHE";
-            } catch (IOException ignored) {
-            }
-        }
-
-        if (rawJson == null) {
-            try {
-                rawJson = httpGet(BASE_URL + "/meta/area_province.json");
-                Files.writeString(diskCache, rawJson, StandardCharsets.UTF_8);
+        // 1. Fresh disk cache (skipped when forceRefresh = true)
+        if (!forceRefresh && Files.exists(diskCache) && !isDiskCacheStale(diskCache, CATALOG_CACHE_TTL_MINUTES)) {
+            String cached = readDiskFileSafe(diskCache);
+            if (cached != null && isValidCatalogJson(cached)) {
+                rawJson = cached;
                 mode = "LIVE_BMKG";
-            } catch (Exception liveEx) {
-                rawJson = null;
             }
         }
 
-        if (rawJson == null && Files.exists(diskCache)) {
+        // 2. Live BMKG fetch (validated before writing to disk cache)
+        if (rawJson == null) {
             try {
-                rawJson = Files.readString(diskCache, StandardCharsets.UTF_8);
-                mode = "OFFLINE_CACHE";
-            } catch (IOException ignored) {
+                String live = httpGet(baseUrl + "/meta/area_province.json");
+                if (isValidCatalogJson(live)) {
+                    rawJson = live;
+                    mode = "LIVE_BMKG";
+                    writeDiskFileSafe(diskCache, live);
+                }
+            } catch (Exception ignored) {
             }
         }
 
-        if (rawJson == null) {
-            rawJson = readClasspathResource("/fallback/area_province.json");
-            mode = "OFFLINE_FALLBACK";
+        // 3. Stale disk cache fallback
+        if (rawJson == null && Files.exists(diskCache)) {
+            String cached = readDiskFileSafe(diskCache);
+            if (cached != null && isValidCatalogJson(cached)) {
+                rawJson = cached;
+                mode = "OFFLINE_CACHE";
+            }
         }
 
+        // 4. Bundled classpath fallback
+        if (rawJson == null && allowClasspathFallback) {
+            String bundled = readClasspathResource("/fallback/area_province.json");
+            if (bundled != null && isValidCatalogJson(bundled)) {
+                rawJson = bundled;
+                mode = "OFFLINE_CACHE";
+            }
+        }
+
+        // 5. All sources failed
         if (rawJson == null) {
-            throw new BmkgApiUnavailableException("Unable to load BMKG sea zone catalog online or from cache.");
+            throw new BmkgApiUnavailableException("Unable to load BMKG sea zone catalog online or from offline cache.");
         }
 
         JsonObject root = JsonParser.parseString(rawJson).getAsJsonObject();
@@ -143,37 +163,47 @@ public class BmkgMarineApiService {
         String rawJson = null;
         String mode = "LIVE_BMKG";
 
-        if (!forceRefresh && Files.exists(diskCache) && !isDiskCacheStale(diskCache)) {
-            try {
-                rawJson = Files.readString(diskCache, StandardCharsets.UTF_8);
-                mode = "DISK_CACHE";
-            } catch (IOException ignored) {
-            }
-        }
-
-        if (rawJson == null) {
-            try {
-                rawJson = httpGet(BASE_URL + "/perairan/" + safeCode + ".json");
-                Files.writeString(diskCache, rawJson, StandardCharsets.UTF_8);
+        // 1. Fresh disk cache (skipped when forceRefresh = true)
+        if (!forceRefresh && Files.exists(diskCache) && !isDiskCacheStale(diskCache, FORECAST_CACHE_TTL_MINUTES)) {
+            String cached = readDiskFileSafe(diskCache);
+            if (cached != null && isValidZoneJson(safeCode, cached)) {
+                rawJson = cached;
                 mode = "LIVE_BMKG";
-            } catch (Exception liveEx) {
-                rawJson = null;
             }
         }
 
-        if (rawJson == null && Files.exists(diskCache)) {
-            try {
-                rawJson = Files.readString(diskCache, StandardCharsets.UTF_8);
-                mode = "OFFLINE_CACHE";
-            } catch (IOException ignored) {
-            }
-        }
-
+        // 2. Live BMKG fetch (validated before writing to disk cache)
         if (rawJson == null) {
-            rawJson = readClasspathResource("/fallback/" + safeCode + ".json");
-            mode = "OFFLINE_FALLBACK";
+            try {
+                String live = httpGet(baseUrl + "/perairan/" + safeCode + ".json");
+                if (isValidZoneJson(safeCode, live)) {
+                    rawJson = live;
+                    mode = "LIVE_BMKG";
+                    writeDiskFileSafe(diskCache, live);
+                }
+            } catch (Exception ignored) {
+            }
         }
 
+        // 3. Stale disk cache fallback
+        if (rawJson == null && Files.exists(diskCache)) {
+            String cached = readDiskFileSafe(diskCache);
+            if (cached != null && isValidZoneJson(safeCode, cached)) {
+                rawJson = cached;
+                mode = "OFFLINE_CACHE";
+            }
+        }
+
+        // 4. Bundled classpath fallback
+        if (rawJson == null && allowClasspathFallback) {
+            String bundled = readClasspathResource("/fallback/" + safeCode + ".json");
+            if (bundled != null && isValidZoneJson(safeCode, bundled)) {
+                rawJson = bundled;
+                mode = "OFFLINE_CACHE";
+            }
+        }
+
+        // 5. All sources failed
         if (rawJson == null) {
             throw new BmkgApiUnavailableException(
                 "BMKG API is unreachable and no offline cache exists for zone '" + safeCode + "'.");
@@ -187,38 +217,96 @@ public class BmkgMarineApiService {
         if (slots.isEmpty()) {
             return null;
         }
+
         Instant now = Instant.now();
-        MarineForecastSlot best = slots.get(0);
-        long smallestDiff = Long.MAX_VALUE;
+        MarineForecastSlot bestByTimestamp = slots.get(0);
+        long smallestDiffMinutes = Long.MAX_VALUE;
+
         for (MarineForecastSlot slot : slots) {
             try {
                 LocalDateTime ldt = LocalDateTime.parse(slot.getTimeUtc(), BMKG_TIME_FMT);
                 Instant slotInstant = ldt.toInstant(ZoneOffset.UTC);
                 long diff = Math.abs(Duration.between(now, slotInstant).toMinutes());
-                if (diff < smallestDiff) {
-                    smallestDiff = diff;
-                    best = slot;
+                if (diff < smallestDiffMinutes) {
+                    smallestDiffMinutes = diff;
+                    bestByTimestamp = slot;
                 }
             } catch (Exception ignored) {
             }
         }
-        return best;
+
+        // Live BMKG and simulated forecasts match exact timestamp (within 24 hours of now)
+        if (smallestDiffMinutes <= 24L * 60L) {
+            return bestByTimestamp;
+        }
+
+        // Outdated offline fallback files match closest UTC time-of-day instead of clamping to the final slot
+        ZonedDateTime nowUtc = now.atZone(ZoneOffset.UTC);
+        int nowMinuteOfDay = nowUtc.getHour() * 60 + nowUtc.getMinute();
+        MarineForecastSlot bestByTimeOfDay = slots.get(0);
+        int smallestCircularDiff = Integer.MAX_VALUE;
+
+        for (MarineForecastSlot slot : slots) {
+            try {
+                LocalDateTime ldt = LocalDateTime.parse(slot.getTimeUtc(), BMKG_TIME_FMT);
+                int slotMinuteOfDay = ldt.getHour() * 60 + ldt.getMinute();
+                int rawDiff = Math.abs(nowMinuteOfDay - slotMinuteOfDay);
+                int circularDiff = Math.min(rawDiff, (24 * 60) - rawDiff);
+                if (circularDiff < smallestCircularDiff) {
+                    smallestCircularDiff = circularDiff;
+                    bestByTimeOfDay = slot;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return bestByTimeOfDay;
+    }
+
+    private JsonObject extractZonePayload(String code, JsonObject root) {
+        if (root == null) return null;
+        if (root.has("forecast_day1")) {
+            return root;
+        }
+        if (root.has(code) && root.get(code).isJsonObject()) {
+            return root.getAsJsonObject(code);
+        }
+        for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
+            if (entry.getValue().isJsonObject()) {
+                return entry.getValue().getAsJsonObject();
+            }
+        }
+        return null;
+    }
+
+    private boolean isValidCatalogJson(String rawJson) {
+        try {
+            JsonObject root = JsonParser.parseString(rawJson).getAsJsonObject();
+            return root.has("data")
+                    && root.get("data").isJsonArray()
+                    && !root.getAsJsonArray("data").isEmpty();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean isValidZoneJson(String code, String rawJson) {
+        try {
+            JsonObject root = JsonParser.parseString(rawJson).getAsJsonObject();
+            JsonObject payload = extractZonePayload(code, root);
+            return payload != null
+                    && payload.has("forecast_day1")
+                    && payload.get("forecast_day1").isJsonArray()
+                    && !payload.getAsJsonArray("forecast_day1").isEmpty();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private SeaZone parseZoneForecast(String code, String rawJson, String mode) {
         JsonObject root = JsonParser.parseString(rawJson).getAsJsonObject();
-        JsonObject payload = root;
-        if (!root.has("forecast_day1")) {
-            if (root.has(code) && root.get(code).isJsonObject()) {
-                payload = root.getAsJsonObject(code);
-            } else {
-                for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
-                    if (entry.getValue().isJsonObject()) {
-                        payload = entry.getValue().getAsJsonObject();
-                        break;
-                    }
-                }
-            }
+        JsonObject payload = extractZonePayload(code, root);
+        if (payload == null) {
+            payload = root;
         }
 
         SeaZone meta = indexByCode.get(code);
@@ -294,7 +382,6 @@ public class BmkgMarineApiService {
             String waveCat;
 
             if (h <= 8) {
-                // Active high-wave storm immediately (h=0..8): DO_NOT_SAIL for SmallFishingBoat & BargeVessel
                 double progress = h / 8.0;
                 wave = 1.95 + Math.sin(progress * Math.PI) * 0.50; // 1.95 - 2.45 m
                 wind = 18.0 + Math.sin(progress * Math.PI) * 4.0;  // 18.0 - 22.0 kt
@@ -305,7 +392,6 @@ public class BmkgMarineApiService {
                 weather = "Hujan Lebat & Angin Kencang";
                 waveCat = "Sedang";
             } else if (h <= 11) {
-                // Transition phase (h=9..11): storm subsiding -> CAUTION for SmallFishingBoat
                 int step = h - 9;
                 wave = 1.15 - (step * 0.05); // 1.15, 1.10, 1.05 m
                 wind = 13.0 - (step * 0.5);  // 13.0, 12.5, 12.0 kt
@@ -316,7 +402,6 @@ public class BmkgMarineApiService {
                 weather = "Berawan Tebal";
                 waveCat = "Rendah";
             } else {
-                // Calm recovery window (h=12..23): 12 consecutive SAFE hours for all vessel classes
                 wave = 0.70;
                 wind = 9.0;
                 gust = 13.0;
@@ -351,7 +436,7 @@ public class BmkgMarineApiService {
                 .uri(URI.create(url))
                 .timeout(Duration.ofSeconds(10))
                 .header("Accept", "application/json")
-                .header("User-Agent", "MaritimeSafetyClearanceSystem/1.0")
+                .header("User-Agent", "MaritimeSafetySystem/1.0")
                 .GET()
                 .build();
         HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
@@ -361,12 +446,28 @@ public class BmkgMarineApiService {
         return resp.body();
     }
 
-    private boolean isDiskCacheStale(Path file) {
+    private boolean isDiskCacheStale(Path file, long maxAgeMinutes) {
         try {
             Instant modified = Files.getLastModifiedTime(file).toInstant();
-            return Duration.between(modified, Instant.now()).toMinutes() > 15;
+            return Duration.between(modified, Instant.now()).toMinutes() > maxAgeMinutes;
         } catch (IOException e) {
             return true;
+        }
+    }
+
+    private String readDiskFileSafe(Path file) {
+        try {
+            return Files.readString(file, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private void writeDiskFileSafe(Path file, String content) {
+        try {
+            Files.createDirectories(cacheDir);
+            Files.writeString(file, content, StandardCharsets.UTF_8);
+        } catch (IOException ignored) {
         }
     }
 
