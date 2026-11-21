@@ -56,7 +56,7 @@ public class CargoShip extends Vessel {
         };
 
         return new SafetyEvaluation(status, score, getVesselType(), getMaxSafeWindKnots(),
-                getMaxSafeWaveMeters(), slot.getTimeWib(), summary, reasons);
+                getMaxSafeWaveMeters(), slot.getTimeLocal(), summary, reasons);
     }
 
     public int getMaxContainerTEU() { return maxContainerTEU; }

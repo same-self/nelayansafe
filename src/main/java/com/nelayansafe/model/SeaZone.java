@@ -13,8 +13,8 @@ public class SeaZone {
     private String validFromUtc;
     private String validToUtc;
     private String dataSourceMode;
-    private String timeZoneCode;
-    private String fetchedAtWib;
+    private String timezoneLabel;
+    private String fetchedAtLocal;
     private List<MarineForecastSlot> day1Slots;
 
     public SeaZone(String areaCode, String areaName, String province) {
@@ -39,10 +39,10 @@ public class SeaZone {
     public void setValidToUtc(String validToUtc) { this.validToUtc = validToUtc; }
     public String getDataSourceMode() { return dataSourceMode; }
     public void setDataSourceMode(String dataSourceMode) { this.dataSourceMode = dataSourceMode; }
-    public String getTimeZoneCode() { return timeZoneCode; }
-    public void setTimeZoneCode(String timeZoneCode) { this.timeZoneCode = timeZoneCode; }
-    public String getFetchedAtWib() { return fetchedAtWib; }
-    public void setFetchedAtWib(String fetchedAtWib) { this.fetchedAtWib = fetchedAtWib; }
+    public String getTimezoneLabel() { return timezoneLabel; }
+    public void setTimezoneLabel(String timezoneLabel) { this.timezoneLabel = timezoneLabel; }
+    public String getFetchedAtLocal() { return fetchedAtLocal; }
+    public void setFetchedAtLocal(String fetchedAtLocal) { this.fetchedAtLocal = fetchedAtLocal; }
 
     public List<MarineForecastSlot> getDay1Slots() {
         return Collections.unmodifiableList(day1Slots);

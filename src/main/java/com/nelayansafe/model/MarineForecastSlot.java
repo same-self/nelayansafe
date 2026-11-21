@@ -2,7 +2,7 @@ package com.nelayansafe.model;
 
 public class MarineForecastSlot {
     private String timeUtc;
-    private String timeWib;
+    private String timeLocal;
     private String weather;
     private double tempAvg;
     private double rhAvg;
@@ -14,7 +14,7 @@ public class MarineForecastSlot {
     private String currentTo;
     private double currentSpeed;
 
-    public MarineForecastSlot(String timeUtc, String timeWib, String weather,
+    public MarineForecastSlot(String timeUtc, String timeLocal, String weather,
                               double tempAvg, double rhAvg, String windFrom,
                               double windSpeed, double windGust, String waveCat,
                               double waveHeight, String currentTo, double currentSpeed) {
@@ -22,7 +22,7 @@ public class MarineForecastSlot {
             throw new IllegalArgumentException("Weather measurements cannot be negative.");
         }
         this.timeUtc = timeUtc;
-        this.timeWib = timeWib;
+        this.timeLocal = timeLocal;
         this.weather = weather;
         this.tempAvg = tempAvg;
         this.rhAvg = rhAvg;
@@ -36,7 +36,7 @@ public class MarineForecastSlot {
     }
 
     public String getTimeUtc() { return timeUtc; }
-    public String getTimeWib() { return timeWib; }
+    public String getTimeLocal() { return timeLocal; }
     public String getWeather() { return weather; }
     public double getTempAvg() { return tempAvg; }
     public double getRhAvg() { return rhAvg; }

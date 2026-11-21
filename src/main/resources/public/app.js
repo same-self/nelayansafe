@@ -316,7 +316,7 @@ function renderZoneVerdict(zone, slot, evalObj) {
   el("verdictBadge").textContent = evalObj.status.replaceAll("_", " ");
   el("verdictTitle").textContent = `${zone.areaName} (${zone.areaCode}): ${evalObj.summary}`;
   el("verdictMeta").textContent =
-    `Station: ${zone.stationName} • Slot: ${slot.timeWib} (${slot.timeUtc}) • Limits: Wind < ${evalObj.maxSafeWindKnots} kt, Wave < ${evalObj.maxSafeWaveMeters} m`;
+    `Station: ${zone.stationName} • Timezone: ${zone.timezoneLabel || "Local"} • Slot: ${slot.timeLocal} (${slot.timeUtc}) • Limits: Wind < ${evalObj.maxSafeWindKnots} kt, Wave < ${evalObj.maxSafeWaveMeters} m`;
   el("verdictScore").textContent = evalObj.riskScore;
 
   const list = el("verdictReasons");
@@ -333,7 +333,7 @@ function renderZoneVerdict(zone, slot, evalObj) {
     <div class="metric-card"><span>Wind Gust</span><strong>${slot.windGust.toFixed(1)} kt</strong><small>Peak sudden gust</small></div>
     <div class="metric-card"><span>Surface Current</span><strong>${slot.currentSpeed.toFixed(2)} kt</strong><small>Heading: ${slot.currentTo}</small></div>
     <div class="metric-card"><span>Weather Condition</span><strong>${slot.weather}</strong><small>BMKG Hourly Slot</small></div>
-    <div class="metric-card"><span>Air Temp / Humidity</span><strong>${slot.tempAvg}°C / ${slot.rhAvg}%</strong><small>Updated: ${zone.fetchedAtWib}</small></div>
+    <div class="metric-card"><span>Air Temp / Humidity</span><strong>${slot.tempAvg}°C / ${slot.rhAvg}%</strong><small>Updated: ${zone.fetchedAtLocal}</small></div>
   `;
 }
 
@@ -344,7 +344,7 @@ function render24HourChart(analysis) {
     : "callout-danger");
   recBox.textContent = analysis.recommendationMessage;
   state.lastRecommendedWindow = analysis.recommendedWindow
-    ? `${analysis.recommendedWindow.startTimeWib} to ${analysis.recommendedWindow.endTimeWib}`
+    ? `${analysis.recommendedWindow.startTimeLocal} to ${analysis.recommendedWindow.endTimeLocal}`
     : "Postpone Departure";
 
   const chart = el("hourlyChart");
@@ -353,7 +353,7 @@ function render24HourChart(analysis) {
     const col = document.createElement("div");
     col.className = "hour-col";
     const heightPct = Math.max(12, pt.evaluation.riskScore);
-    const shortHour = pt.slot.timeWib.replace(/\s+(WIB|WITA|WIT)$/, "");
+    const shortHour = pt.slot.timeLocal.replace(/\s+(WIB|WITA|WIT)$/, "");
     col.innerHTML = `
       <span class="hour-score">${pt.evaluation.riskScore}</span>
       <div class="hour-bar bar-${pt.evaluation.status}" style="height: ${heightPct}%"></div>
@@ -361,7 +361,7 @@ function render24HourChart(analysis) {
     `;
     col.addEventListener("click", () => {
       el("hourlyInspector").innerHTML =
-        `<strong>${pt.slot.timeWib} (${pt.slot.timeUtc}):</strong> Status <strong>${pt.evaluation.status}</strong> (Risk ${pt.evaluation.riskScore}/100) | ` +
+        `<strong>${pt.slot.timeLocal} (${pt.slot.timeUtc}):</strong> Status <strong>${pt.evaluation.status}</strong> (Risk ${pt.evaluation.riskScore}/100) | ` +
         `Wave <strong>${pt.slot.waveHeight} m</strong> (${pt.slot.waveCat}), Wind <strong>${pt.slot.windSpeed} kt</strong> (Gust ${pt.slot.windGust} kt), Current <strong>${pt.slot.currentSpeed} kt</strong>, Weather: ${pt.slot.weather}`;
     });
     chart.appendChild(col);
@@ -416,7 +416,7 @@ async function analyzeRoute() {
       card.innerHTML = `
         <span class="status-pill" style="margin-bottom:0.4rem;">Segment ${i + 1}: ${seg.evaluation.status}</span>
         <h4 style="margin:0.25rem 0;">${seg.areaName} (${seg.areaCode})</h4>
-        <p class="muted" style="margin:0 0 0.5rem 0;">${seg.province} • Risk Score: <strong>${seg.evaluation.riskScore}/100</strong></p>
+        <p class="muted" style="margin:0 0 0.5rem 0;">${seg.province} • Slot: ${seg.currentSlot.timeLocal} • Risk Score: <strong>${seg.evaluation.riskScore}/100</strong></p>
         <p style="margin:0; font-size:0.85rem;">Wave: <strong>${seg.currentSlot.waveHeight} m</strong> | Wind: <strong>${seg.currentSlot.windSpeed} kt</strong> | Current: <strong>${seg.currentSlot.currentSpeed} kt</strong></p>
       `;
       grid.appendChild(card);
@@ -478,7 +478,7 @@ async function submitClearance() {
 
   const c = data.clearance;
   box.className = "callout callout-safe";
-  box.innerHTML = `<strong>✅ CLEARANCE ISSUED (${c.clearanceId}):</strong> ${c.vesselName} cleared for ${c.routeZoneCodes.join(" → ")} (${c.safetyStatus}, Risk ${c.riskScore}/100) at ${c.issuedTimestampWib}.`;
+  box.innerHTML = `<strong>✅ CLEARANCE ISSUED (${c.clearanceId}):</strong> ${c.vesselName} cleared for ${c.routeZoneCodes.join(" → ")} (${c.safetyStatus}, Risk ${c.riskScore}/100) at ${c.issuedTimestampLocal}.`;
   await loadClearanceLogs();
 }
 
@@ -491,7 +491,7 @@ async function loadClearanceLogs() {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><code>${c.clearanceId}</code></td>
-      <td>${c.issuedTimestampWib}</td>
+      <td>${c.issuedTimestampLocal}</td>
       <td>${c.vesselName} <small class="muted">(${c.vesselType})</small></td>
       <td>${c.crewCount}/${c.maxCrewCapacity}</td>
       <td>${c.routeZoneCodes.join(" → ")}</td>

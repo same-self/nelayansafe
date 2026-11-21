@@ -20,7 +20,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -32,49 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class BmkgMarineApiService {
     private static final String BASE_URL = "https://maritim.bmkg.go.id/marine2026-data";
-    private static final ZoneId WIB_ZONE = ZoneId.of("Asia/Jakarta");
     private static final DateTimeFormatter BMKG_TIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'");
-    private static final DateTimeFormatter WIB_FMT = DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm 'WIB'");
-    private static final DateTimeFormatter WIB_SHORT_FMT = DateTimeFormatter.ofPattern("HH:mm 'WIB'");
-
-    public enum IndonesianTimeZone {
-        WIB(ZoneId.of("Asia/Jakarta"), "WIB"),
-        WITA(ZoneId.of("Asia/Makassar"), "WITA"),
-        WIT(ZoneId.of("Asia/Jayapura"), "WIT");
-
-        private final ZoneId zoneId;
-        private final String code;
-
-        IndonesianTimeZone(ZoneId zoneId, String code) {
-            this.zoneId = zoneId;
-            this.code = code;
-        }
-
-        public ZoneId getZoneId() { return zoneId; }
-        public String getCode() { return code; }
-    }
-
-    public static IndonesianTimeZone resolveTimeZone(String province) {
-        if (province == null || province.isBlank()) {
-            return IndonesianTimeZone.WIB;
-        }
-        String p = province.trim().toLowerCase();
-
-        // WIT (UTC+9)
-        if (p.contains("papua") || p.contains("maluku")) {
-            return IndonesianTimeZone.WIT;
-        }
-
-        // WITA (UTC+8)
-        if (p.contains("sulawesi") || p.contains("gorontalo") ||
-            p.contains("bali") || p.contains("nusa tenggara") ||
-            p.contains("kalimantan selatan") || p.contains("kalimantan timur") || p.contains("kalimantan utara")) {
-            return IndonesianTimeZone.WITA;
-        }
-
-        // Default: WIB (UTC+7)
-        return IndonesianTimeZone.WIB;
-    }
 
     private final HttpClient httpClient;
     private final Path cacheDir;
@@ -266,20 +223,17 @@ public class BmkgMarineApiService {
 
         SeaZone meta = indexByCode.get(code);
         String name = getString(payload, "name", meta != null ? meta.getAreaName() : code);
-        String province = meta != null && meta.getProvince() != null && !meta.getProvince().isBlank()
-                ? meta.getProvince()
-                : getString(payload, "province", "Indonesia");
-        IndonesianTimeZone tz = resolveTimeZone(province);
+        String province = meta != null ? meta.getProvince() : "Indonesia";
+        IndonesianTimezoneResolver.TimezoneInfo tz = IndonesianTimezoneResolver.resolve(province, name);
 
         SeaZone zone = new SeaZone(code, name, province);
-        zone.setTimeZoneCode(tz.getCode());
         zone.setStationName(getString(payload, "nama_stasiun", "BMKG Maritime Meteorological Station"));
         zone.setIssuedUtc(getString(payload, "issued", "N/A"));
         zone.setValidFromUtc(getString(payload, "valid_from", "N/A"));
         zone.setValidToUtc(getString(payload, "valid_to", "N/A"));
         zone.setDataSourceMode(mode);
-        zone.setFetchedAtWib(ZonedDateTime.now(tz.getZoneId())
-                .format(DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm '" + tz.getCode() + "'")));
+        zone.setTimezoneLabel(tz.displayLabel());
+        zone.setFetchedAtLocal(IndonesianTimezoneResolver.formatFullNow(tz));
 
         List<MarineForecastSlot> slots = new ArrayList<>();
         JsonArray arr = payload.getAsJsonArray("forecast_day1");
@@ -289,7 +243,7 @@ public class BmkgMarineApiService {
                 String timeUtc = getString(obj, "time", "");
                 slots.add(new MarineForecastSlot(
                         timeUtc,
-                        convertUtcToLocalTime(timeUtc, tz),
+                        convertUtcToLocal(timeUtc, tz),
                         getString(obj, "weather", "N/A"),
                         getDouble(obj, "temp_avg", 28.0),
                         getDouble(obj, "rh_avg", 80.0),
@@ -311,26 +265,24 @@ public class BmkgMarineApiService {
         SeaZone meta = indexByCode.get(code);
         String name = meta != null ? meta.getAreaName() : "Simulated High-Wave Sea Zone";
         String province = meta != null ? meta.getProvince() : "Indonesia";
-        IndonesianTimeZone tz = resolveTimeZone(province);
+        IndonesianTimezoneResolver.TimezoneInfo tz = IndonesianTimezoneResolver.resolve(province, name);
 
         SeaZone zone = new SeaZone(code, name, province);
-        zone.setTimeZoneCode(tz.getCode());
         zone.setStationName("SIMULATED HIGH-WAVE ADVISORY (DEMO TEST PROFILE)");
         zone.setIssuedUtc(ZonedDateTime.now(ZoneOffset.UTC)
                 .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:00 'UTC'")));
         zone.setValidFromUtc("24h Simulation Window");
         zone.setValidToUtc("+24h");
         zone.setDataSourceMode("SIMULATED_STORM");
-        zone.setFetchedAtWib(ZonedDateTime.now(tz.getZoneId())
-                .format(DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm '" + tz.getCode() + "'")));
+        zone.setTimezoneLabel(tz.displayLabel());
+        zone.setFetchedAtLocal(IndonesianTimezoneResolver.formatFullNow(tz));
 
         List<MarineForecastSlot> slots = new ArrayList<>();
         ZonedDateTime baseUtc = ZonedDateTime.now(ZoneOffset.UTC).withMinute(0).withSecond(0).withNano(0);
         for (int h = 0; h < 24; h++) {
             ZonedDateTime slotUtc = baseUtc.plusHours(h);
             String utcStr = slotUtc.format(BMKG_TIME_FMT);
-            String localTimeStr = slotUtc.withZoneSameInstant(tz.getZoneId())
-                    .format(DateTimeFormatter.ofPattern("HH:mm '" + tz.getCode() + "'"));
+            String localStr = IndonesianTimezoneResolver.formatShort(slotUtc, tz);
 
             double wave;
             double wind;
@@ -377,7 +329,7 @@ public class BmkgMarineApiService {
 
             slots.add(new MarineForecastSlot(
                     utcStr,
-                    localTimeStr,
+                    localStr,
                     weather,
                     tempAvg,
                     rhAvg,
@@ -427,15 +379,10 @@ public class BmkgMarineApiService {
         }
     }
 
-    private String convertUtcToWib(String utcStr) {
-        return convertUtcToLocalTime(utcStr, IndonesianTimeZone.WIB);
-    }
-
-    private String convertUtcToLocalTime(String utcStr, IndonesianTimeZone tz) {
+    private String convertUtcToLocal(String utcStr, IndonesianTimezoneResolver.TimezoneInfo tz) {
         try {
             LocalDateTime ldt = LocalDateTime.parse(utcStr, BMKG_TIME_FMT);
-            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("HH:mm '" + tz.getCode() + "'");
-            return ldt.atOffset(ZoneOffset.UTC).atZoneSameInstant(tz.getZoneId()).format(fmt);
+            return IndonesianTimezoneResolver.formatShort(ldt.atZone(ZoneOffset.UTC), tz);
         } catch (Exception e) {
             return utcStr;
         }

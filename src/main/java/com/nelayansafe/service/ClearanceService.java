@@ -16,7 +16,6 @@ import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -24,9 +23,7 @@ import java.util.Collections;
 import java.util.List;
 
 public class ClearanceService {
-    private static final ZoneId WIB_ZONE = ZoneId.of("Asia/Jakarta");
     private static final DateTimeFormatter ID_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
-    private static final DateTimeFormatter LOG_FMT = DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm:ss 'WIB'");
 
     private final Path dataDir = Path.of("data");
     private final Path jsonFile = dataDir.resolve("clearances.json");
@@ -83,8 +80,14 @@ public class ClearanceService {
             names.add(seg.getAreaName());
         }
 
-        ZonedDateTime nowWib = ZonedDateTime.now(WIB_ZONE);
-        String clearanceId = String.format("CLR-%s-%03d", nowWib.format(ID_DATE_FMT), logs.size() + 1);
+        IndonesianTimezoneResolver.TimezoneInfo tz = IndonesianTimezoneResolver.WIB;
+        if (!routeEval.getSegments().isEmpty()) {
+            RouteEvaluation.ZoneSegment origin = routeEval.getSegments().get(0);
+            tz = IndonesianTimezoneResolver.resolve(origin.getProvince(), origin.getAreaName());
+        }
+
+        ZonedDateTime nowLocal = ZonedDateTime.now(tz.zoneId());
+        String clearanceId = String.format("CLR-%s-%03d", nowLocal.format(ID_DATE_FMT), logs.size() + 1);
         SailingClearance clearance = new SailingClearance(
                 clearanceId,
                 vessel,
@@ -95,7 +98,7 @@ public class ClearanceService {
                 routeEval.getOverallStatus(),
                 recommendedWindow == null || recommendedWindow.isBlank() ? "Immediate window checked" : recommendedWindow,
                 cautionAcknowledged,
-                nowWib.format(LOG_FMT)
+                IndonesianTimezoneResolver.formatLogNow(tz)
         );
 
         logs.add(0, clearance);
@@ -109,7 +112,7 @@ public class ClearanceService {
 
     public synchronized String generateCsvContent() {
         StringBuilder sb = new StringBuilder();
-        sb.append("clearance_id,vessel_id,vessel_name,vessel_type,crew_count,max_crew,life_jackets,working_radio,route_zones,risk_score,safety_status,caution_acknowledged,recommended_window,issued_wib\n");
+        sb.append("clearance_id,vessel_id,vessel_name,vessel_type,crew_count,max_crew,life_jackets,working_radio,route_zones,risk_score,safety_status,caution_acknowledged,recommended_window,issued_local_time\n");
         for (SailingClearance c : logs) {
             sb.append(csv(c.getClearanceId())).append(',')
               .append(csv(c.getVesselId())).append(',')
@@ -124,7 +127,7 @@ public class ClearanceService {
               .append(c.getSafetyStatus()).append(',')
               .append(c.isCautionAcknowledged()).append(',')
               .append(csv(c.getRecommendedWindow())).append(',')
-              .append(csv(c.getIssuedTimestampWib())).append('\n');
+              .append(csv(c.getIssuedTimestampLocal())).append('\n');
         }
         return sb.toString();
     }

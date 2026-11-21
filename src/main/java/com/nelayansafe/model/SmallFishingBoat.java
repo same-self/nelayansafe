@@ -69,7 +69,7 @@ public class SmallFishingBoat extends Vessel {
         };
 
         return new SafetyEvaluation(status, score, getVesselType(), getMaxSafeWindKnots(),
-                getMaxSafeWaveMeters(), slot.getTimeWib(), summary, reasons);
+                getMaxSafeWaveMeters(), slot.getTimeLocal(), summary, reasons);
     }
 
     public double getGrossTonnage() { return grossTonnage; }

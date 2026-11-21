@@ -75,7 +75,7 @@ public class PassengerFerry extends Vessel {
         };
 
         return new SafetyEvaluation(status, score, getVesselType(), getMaxSafeWindKnots(),
-                getMaxSafeWaveMeters(), slot.getTimeWib(), summary, reasons);
+                getMaxSafeWaveMeters(), slot.getTimeLocal(), summary, reasons);
     }
 
     public int getMaxPassengers() { return maxPassengers; }

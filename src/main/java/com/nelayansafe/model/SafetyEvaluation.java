@@ -10,19 +10,19 @@ public class SafetyEvaluation {
     private String vesselType;
     private double maxSafeWindKnots;
     private double maxSafeWaveMeters;
-    private String evaluatedTimeWib;
+    private String evaluatedTimeLocal;
     private String summary;
     private List<String> reasons;
 
     public SafetyEvaluation(SafetyStatus status, int riskScore, String vesselType,
                             double maxSafeWindKnots, double maxSafeWaveMeters,
-                            String evaluatedTimeWib, String summary, List<String> reasons) {
+                            String evaluatedTimeLocal, String summary, List<String> reasons) {
         this.status = status;
         this.riskScore = Math.max(0, Math.min(100, riskScore));
         this.vesselType = vesselType;
         this.maxSafeWindKnots = maxSafeWindKnots;
         this.maxSafeWaveMeters = maxSafeWaveMeters;
-        this.evaluatedTimeWib = evaluatedTimeWib;
+        this.evaluatedTimeLocal = evaluatedTimeLocal;
         this.summary = summary;
         this.reasons = new ArrayList<>(reasons);
     }
@@ -32,7 +32,7 @@ public class SafetyEvaluation {
     public String getVesselType() { return vesselType; }
     public double getMaxSafeWindKnots() { return maxSafeWindKnots; }
     public double getMaxSafeWaveMeters() { return maxSafeWaveMeters; }
-    public String getEvaluatedTimeWib() { return evaluatedTimeWib; }
+    public String getEvaluatedTimeLocal() { return evaluatedTimeLocal; }
     public String getSummary() { return summary; }
     public List<String> getReasons() { return Collections.unmodifiableList(reasons); }
 }

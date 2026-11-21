@@ -48,7 +48,7 @@ public class RouteAndWindowOptimizer {
             DepartureWindow best = safeWindows.get(0);
             String msg = String.format(
                     "Best Safe Departure Window: %s to %s (%d hr%s) • Avg Wave: %.2f m • Avg Wind: %.1f kt • Risk Score: %d/100",
-                    best.getStartTimeWib(), best.getEndTimeWib(), best.getDurationHours(),
+                    best.getStartTimeLocal(), best.getEndTimeLocal(), best.getDurationHours(),
                     best.getDurationHours() > 1 ? "s" : "",
                     best.getAvgWaveHeight(), best.getAvgWindSpeed(), best.getAvgRiskScore());
             return new WindowOptimizationResult(best, msg, safeWindows, hourlyPoints);
@@ -58,7 +58,7 @@ public class RouteAndWindowOptimizer {
             DepartureWindow bestCaution = cautionWindows.get(0);
             String msg = String.format(
                     "No fully SAFE hours in next 24h. Lowest-risk CAUTION window: %s to %s (%d hr%s, Avg Wave: %.2f m, Risk Score: %d/100).",
-                    bestCaution.getStartTimeWib(), bestCaution.getEndTimeWib(), bestCaution.getDurationHours(),
+                    bestCaution.getStartTimeLocal(), bestCaution.getEndTimeLocal(), bestCaution.getDurationHours(),
                     bestCaution.getDurationHours() > 1 ? "s" : "",
                     bestCaution.getAvgWaveHeight(), bestCaution.getAvgRiskScore());
             return new WindowOptimizationResult(bestCaution, msg, cautionWindows, hourlyPoints);
@@ -88,8 +88,8 @@ public class RouteAndWindowOptimizer {
                     i++;
                 }
                 int count = i - start;
-                String startTime = points.get(start).slot().getTimeWib();
-                String endTime = points.get(i - 1).slot().getTimeWib();
+                String startTime = points.get(start).slot().getTimeLocal();
+                String endTime = points.get(i - 1).slot().getTimeLocal();
                 windows.add(new DepartureWindow(
                         target,
                         startTime,

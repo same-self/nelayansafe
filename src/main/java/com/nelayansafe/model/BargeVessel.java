@@ -79,7 +79,7 @@ public class BargeVessel extends Vessel {
         };
 
         return new SafetyEvaluation(status, score, getVesselType(), getMaxSafeWindKnots(),
-                getMaxSafeWaveMeters(), slot.getTimeWib(), summary, reasons);
+                getMaxSafeWaveMeters(), slot.getTimeLocal(), summary, reasons);
     }
 
     public double getMaxCargoTon() { return maxCargoTon; }

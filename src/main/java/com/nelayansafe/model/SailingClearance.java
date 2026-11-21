@@ -1,5 +1,7 @@
 package com.nelayansafe.model;
 
+import com.google.gson.annotations.SerializedName;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -19,13 +21,15 @@ public class SailingClearance {
     private SafetyStatus safetyStatus;
     private String recommendedWindow;
     private boolean cautionAcknowledged;
-    private String issuedTimestampWib;
+
+    @SerializedName(value = "issuedTimestampLocal", alternate = {"issuedTimestampWib"})
+    private String issuedTimestampLocal;
 
     public SailingClearance(String clearanceId, Vessel vessel, int crewCount,
                             List<String> routeZoneCodes, List<String> routeZoneNames,
                             int riskScore, SafetyStatus safetyStatus,
                             String recommendedWindow, boolean cautionAcknowledged,
-                            String issuedTimestampWib) {
+                            String issuedTimestampLocal) {
         this.clearanceId = clearanceId;
         this.vesselId = vessel.getVesselId();
         this.vesselName = vessel.getVesselName();
@@ -40,7 +44,7 @@ public class SailingClearance {
         this.safetyStatus = safetyStatus;
         this.recommendedWindow = recommendedWindow;
         this.cautionAcknowledged = cautionAcknowledged;
-        this.issuedTimestampWib = issuedTimestampWib;
+        this.issuedTimestampLocal = issuedTimestampLocal;
     }
 
     public String getClearanceId() { return clearanceId; }
@@ -57,5 +61,5 @@ public class SailingClearance {
     public SafetyStatus getSafetyStatus() { return safetyStatus; }
     public String getRecommendedWindow() { return recommendedWindow; }
     public boolean isCautionAcknowledged() { return cautionAcknowledged; }
-    public String getIssuedTimestampWib() { return issuedTimestampWib; }
+    public String getIssuedTimestampLocal() { return issuedTimestampLocal; }
 }
