@@ -88,6 +88,23 @@ h2 { margin: 0 0 0.25rem 0; font-size: 1.1rem; }
   gap: 0.9rem;
 }
 
+.subclass-specs-wrap {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px dashed var(--border);
+}
+.subclass-spec-tag {
+  font-size: 0.78rem;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 0.45rem;
+}
+.subclass-spec-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 260px));
+  gap: 0.9rem;
+}
+
 .field { display: flex; flex-direction: column; gap: 0.35rem; }
 .field.grow { flex: 1; min-width: 240px; }
 .field.align-end { justify-content: flex-end; }

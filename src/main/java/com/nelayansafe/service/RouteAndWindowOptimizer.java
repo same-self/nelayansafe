@@ -114,8 +114,8 @@ public class RouteAndWindowOptimizer {
         }
 
         List<RouteEvaluation.ZoneSegment> segments = new ArrayList<>();
-        SafetyStatus worstStatus = SafetyStatus.SAFE;
-        int highestRisk = -1;
+        SafetyStatus worstStatus = null;
+        int bottleneckRisk = -1;
         String bottleneckCode = "";
         String bottleneckName = "";
 
@@ -135,30 +135,30 @@ public class RouteAndWindowOptimizer {
                     eval
             ));
 
-            if (eval.getRiskScore() > highestRisk || eval.getStatus().ordinal() > worstStatus.ordinal()) {
-                if (eval.getStatus().ordinal() >= worstStatus.ordinal()) {
-                    worstStatus = eval.getStatus();
-                }
-                if (eval.getRiskScore() > highestRisk) {
-                    highestRisk = eval.getRiskScore();
-                    bottleneckCode = zone.getAreaCode();
-                    bottleneckName = zone.getAreaName();
-                }
+            boolean isMoreSevere = (worstStatus == null)
+                    || (eval.getStatus().ordinal() > worstStatus.ordinal())
+                    || (eval.getStatus() == worstStatus && eval.getRiskScore() > bottleneckRisk);
+
+            if (isMoreSevere) {
+                worstStatus = eval.getStatus();
+                bottleneckRisk = eval.getRiskScore();
+                bottleneckCode = zone.getAreaCode();
+                bottleneckName = zone.getAreaName();
             }
         }
 
         String summary = switch (worstStatus) {
             case DO_NOT_SAIL -> String.format(
                     "ROUTE BLOCKED: Bottleneck at %s (%s) with Risk Score %d/100 exceeds BMKG limits for %s.",
-                    bottleneckName, bottleneckCode, highestRisk, vessel.getVesselType());
+                    bottleneckName, bottleneckCode, bottleneckRisk, vessel.getVesselType());
             case CAUTION -> String.format(
                     "ROUTE CAUTION: Highest risk at %s (%s) with Risk Score %d/100. Captain acknowledgment required.",
-                    bottleneckName, bottleneckCode, highestRisk);
+                    bottleneckName, bottleneckCode, bottleneckRisk);
             case SAFE -> String.format(
                     "ROUTE CLEAR: All %d zone(s) are SAFE for %s (Peak Risk Score: %d/100 at %s).",
-                    segments.size(), vessel.getVesselType(), highestRisk, bottleneckName);
+                    segments.size(), vessel.getVesselType(), bottleneckRisk, bottleneckName);
         };
 
-        return new RouteEvaluation(worstStatus, highestRisk, bottleneckCode, bottleneckName, summary, segments);
+        return new RouteEvaluation(worstStatus, bottleneckRisk, bottleneckCode, bottleneckName, summary, segments);
     }
 }

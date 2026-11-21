@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NelayanSafe — Maritime Sailing Safety &amp; Clearance System</title>
+  <title>Maritime Sailing Safety and Departure Window System</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -11,8 +11,8 @@
     <div class="brand">
       <div class="brand-icon">⚓</div>
       <div>
-        <h1>NelayanSafe</h1>
-        <p>Vessel-Specific Maritime Sailing Safety, Departure Optimizer &amp; Clearance System</p>
+        <h1>Maritime Sailing Safety and Departure Window System</h1>
+        <p>Vessel-Specific BMKG Marine Forecast Evaluation, Departure Optimizer, and Harbor Clearance</p>
       </div>
     </div>
 
@@ -31,7 +31,7 @@
     <section class="card vessel-panel">
       <div class="section-header">
         <div>
-          <h2>1. Vessel &amp; Safety Gear Profile</h2>
+          <h2>1. Vessel and Safety Gear Profile</h2>
           <p class="subtitle">Evaluates live BMKG forecasts polymorphically using official vessel-class safety limits</p>
         </div>
         <div class="preset-bar">
@@ -47,10 +47,10 @@
         <div class="field">
           <label for="vesselType">Vessel Class</label>
           <select id="vesselType">
-            <option value="SmallFishingBoat">Small Fishing Boat (&gt;15 kt / &gt;1.25 m)</option>
-            <option value="BargeVessel">Barge Vessel (&gt;16 kt / &gt;1.50 m)</option>
-            <option value="PassengerFerry">Passenger Ferry (&gt;21 kt / &gt;2.50 m)</option>
-            <option value="CargoShip">Cargo / Cruise Ship (&gt;27 kt / &gt;4.00 m)</option>
+            <option value="SmallFishingBoat">Small Fishing Boat (&ge;15 kt / &ge;1.25 m)</option>
+            <option value="BargeVessel">Barge Vessel (&ge;16 kt / &ge;1.50 m)</option>
+            <option value="PassengerFerry">Passenger Ferry (&ge;21 kt / &ge;2.50 m)</option>
+            <option value="CargoShip">Cargo / Cruise Ship (&ge;27 kt / &ge;4.00 m)</option>
           </select>
         </div>
         <div class="field">
@@ -77,14 +77,69 @@
           </div>
         </div>
       </div>
+
+      <!-- Dynamic Subclass-Specific Attributes (UML Polymorphism Specs) -->
+      <div class="subclass-specs-wrap">
+        <div id="specsSmallFishingBoat" class="subclass-spec-block">
+          <div class="subclass-spec-tag">SmallFishingBoat Specific Attributes</div>
+          <div class="subclass-spec-group">
+            <div class="field">
+              <label for="grossTonnage">Gross Tonnage (GT)</label>
+              <input type="number" id="grossTonnage" min="0.5" step="0.5" value="5.0" />
+            </div>
+            <div class="field">
+              <label for="maxSafeCurrentKnots">Max Safe Current (knots)</label>
+              <input type="number" id="maxSafeCurrentKnots" min="0.5" max="5.0" step="0.1" value="2.0" />
+            </div>
+          </div>
+        </div>
+
+        <div id="specsBargeVessel" class="subclass-spec-block hidden">
+          <div class="subclass-spec-tag">BargeVessel Specific Attributes (Enforces Cargo Capacity Limit)</div>
+          <div class="subclass-spec-group">
+            <div class="field">
+              <label for="maxCargoTon">Max Cargo Capacity (Tons)</label>
+              <input type="number" id="maxCargoTon" min="1" step="100" value="3000" />
+            </div>
+            <div class="field">
+              <label for="currentCargoTon">Current Cargo Load (Tons)</label>
+              <input type="number" id="currentCargoTon" min="0" step="100" value="2000" />
+            </div>
+          </div>
+        </div>
+
+        <div id="specsPassengerFerry" class="subclass-spec-block hidden">
+          <div class="subclass-spec-tag">PassengerFerry Specific Attributes (Enforces Passenger Capacity Limit)</div>
+          <div class="subclass-spec-group">
+            <div class="field">
+              <label for="maxPassengers">Max Passenger Capacity</label>
+              <input type="number" id="maxPassengers" min="1" value="300" />
+            </div>
+            <div class="field">
+              <label for="currentPassengers">Current Passengers Onboard</label>
+              <input type="number" id="currentPassengers" min="0" value="180" />
+            </div>
+          </div>
+        </div>
+
+        <div id="specsCargoShip" class="subclass-spec-block hidden">
+          <div class="subclass-spec-tag">CargoShip Specific Attributes</div>
+          <div class="subclass-spec-group">
+            <div class="field">
+              <label for="maxContainerTEU">Max Container Capacity (TEU)</label>
+              <input type="number" id="maxContainerTEU" min="1" step="50" value="1200" />
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- Navigation Tabs -->
     <nav class="tabs">
-      <button class="tab-btn active" data-tab="zoneTab">Live Zone &amp; 24h Window</button>
+      <button class="tab-btn active" data-tab="zoneTab">Live Zone and 24h Window</button>
       <button class="tab-btn" data-tab="routeTab">Multi-Zone Route Checker</button>
-      <button class="tab-btn" data-tab="clearanceTab">Harbor Clearance &amp; Logs</button>
-      <button class="tab-btn" data-tab="rulesTab">BMKG Rules &amp; OOP Reference</button>
+      <button class="tab-btn" data-tab="clearanceTab">Harbor Clearance and Logs</button>
+      <button class="tab-btn" data-tab="rulesTab">BMKG Rules and OOP Reference</button>
     </nav>
 
     <!-- TAB 1: Live Zone & 24h Departure Optimizer -->
@@ -125,7 +180,7 @@
         <div class="section-header">
           <div>
             <h2>24-Hour Safest Departure Window Optimizer</h2>
-            <p class="subtitle">Scans BMKG <code>forecast_day1</code> hourly slots to find calmest sailing hours in WIB (UTC+7). Click any hour bar to inspect.</p>
+            <p class="subtitle">Scans BMKG <code>forecast_day1</code> hourly slots to find the calmest sailing hours in local Indonesian time. Click any hour bar to inspect.</p>
           </div>
         </div>
         <div id="windowRecommendationBox" class="callout callout-info">Loading 24-hour forecast...</div>
@@ -140,7 +195,7 @@
         <div class="section-header">
           <div>
             <h2>Multi-Zone Route Safety Analyzer</h2>
-            <p class="subtitle">Add 2–5 sea zones along your planned voyage. System identifies the highest-risk bottleneck zone.</p>
+            <p class="subtitle">Add 2 to 5 sea zones along your planned voyage. The system identifies the highest-risk bottleneck zone.</p>
           </div>
           <button id="addRouteZoneBtn" class="btn btn-secondary">+ Add Selected Zone</button>
         </div>
@@ -161,7 +216,7 @@
             <p id="routeBottleneckMeta" class="muted"></p>
           </div>
           <div class="risk-box">
-            <span class="risk-label">Peak Risk</span>
+            <span class="risk-label">Bottleneck Risk</span>
             <strong id="routePeakScore">--</strong><small>/100</small>
           </div>
         </div>
@@ -175,7 +230,7 @@
         <div class="section-header">
           <div>
             <h2>Departure Clearance Gate (Syahbandar Guardrails)</h2>
-            <p class="subtitle">Enforces crew capacity, mandatory safety gear, and BMKG weather gate via Java Custom Exceptions</p>
+            <p class="subtitle">Enforces crew/cargo/passenger capacity, mandatory safety gear, and BMKG weather rules via Java Custom Exceptions</p>
           </div>
         </div>
 
@@ -201,7 +256,7 @@
         <div class="section-header">
           <div>
             <h2>Issued Sailing Clearances Log</h2>
-            <p class="subtitle">Saved persistently on server to <code>data/clearances.json</code> &amp; <code>data/clearances.csv</code></p>
+            <p class="subtitle">Saved persistently on server to <code>data/clearances.json</code> and <code>data/clearances.csv</code></p>
           </div>
           <a href="/api/clearances/export" class="btn btn-secondary">⬇ Download CSV Log</a>
         </div>
@@ -211,7 +266,7 @@
             <thead>
               <tr>
                 <th>Clearance ID</th>
-                <th>Issued (WIB)</th>
+                <th>Issued Time</th>
                 <th>Vessel</th>
                 <th>Crew</th>
                 <th>Route Zones</th>
@@ -229,7 +284,7 @@
     <section id="rulesTab" class="tab-content">
       <div class="card">
         <h2>Official BMKG Vessel Sailing Safety Thresholds</h2>
-        <p class="subtitle">Zero arbitrary formulas: every threshold is mapped directly to BMKG Marine Meteorology guidelines.</p>
+        <p class="subtitle">Every wind and wave limit is mapped directly to official BMKG Marine Meteorology guidelines.</p>
         <div class="table-wrap">
           <table>
             <thead>
@@ -238,47 +293,58 @@
                 <th>BMKG Vessel Class</th>
                 <th>Risky Wind Limit</th>
                 <th>Risky Wave Limit</th>
-                <th>Polymorphic Caution Factors</th>
+                <th>Subclass Attributes and Polymorphic Modifiers (0 to 15 pts)</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td><code>SmallFishingBoat</code></td>
                 <td>Perahu Nelayan</td>
-                <td>&gt; 15 knots</td>
-                <td>&gt; 1.25 m</td>
-                <td>&ge;80% limit, gusts &gt;1.3x wind limit, surface current &ge;1.5 kt</td>
+                <td>&ge; 15 knots</td>
+                <td>&ge; 1.25 m</td>
+                <td><code>grossTonnage</code>, <code>maxSafeCurrentKnots</code>; wind gust excess, current drift, small-hull vulnerability (&lt;10 GT)</td>
               </tr>
               <tr>
                 <td><code>BargeVessel</code></td>
                 <td>Kapal Tongkang</td>
-                <td>&gt; 16 knots</td>
-                <td>&gt; 1.50 m</td>
-                <td>&ge;80% limit, cross-gusts &gt;1.35x limit, current &ge;2.0 kt</td>
+                <td>&ge; 16 knots</td>
+                <td>&ge; 1.50 m</td>
+                <td><code>maxCargoTon</code>, <code>currentCargoTon</code>; current drag, cross-gusts, cargo load ratio + cargo overcapacity gate</td>
               </tr>
               <tr>
                 <td><code>PassengerFerry</code></td>
                 <td>Kapal Ferry</td>
-                <td>&gt; 21 knots</td>
-                <td>&gt; 2.50 m</td>
-                <td>&ge;80% limit, gusts &ge;27 kt (passenger stability margin)</td>
+                <td>&ge; 21 knots</td>
+                <td>&ge; 2.50 m</td>
+                <td><code>maxPassengers</code>, <code>currentPassengers</code>; swell roll stability, occupancy margin, gusts + passenger overcapacity gate</td>
               </tr>
               <tr>
                 <td><code>CargoShip</code></td>
                 <td>Kapal Kargo / Pesiar</td>
-                <td>&gt; 27 knots</td>
-                <td>&gt; 4.00 m</td>
-                <td>&ge;80% limit, gale gusts &ge;35 kt</td>
+                <td>&ge; 27 knots</td>
+                <td>&ge; 4.00 m</td>
+                <td><code>maxContainerTEU</code>; container stack windage (TEU) and high-wind gust exposure</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
+
+      <div class="card">
+        <h2>Conservative System Extensions (Decision Rules)</h2>
+        <p class="subtitle">Applied uniformly on top of official BMKG thresholds to prioritize crew safety before departure.</p>
+        <ul class="reason-list" style="margin-top: 0.75rem;">
+          <li><strong>DO_NOT_SAIL (Conservative OR Gate):</strong> Triggered when <code>windSpeed &ge; maxSafeWind</code> <strong>OR</strong> <code>waveHeight &ge; maxSafeWave</code> (stricter than BMKG's combined advisory wording).</li>
+          <li><strong>CAUTION Buffer:</strong> Triggered when wave or wind reaches <strong>&ge; 75%</strong> of the vessel limit, <code>windGust &ge; maxSafeWind</code>, or <code>currentSpeed &ge; 2.0 kt</code>.</li>
+          <li><strong>Polymorphic Risk Score (0 to 100):</strong> <code>min(100, round(85 * max(wind/maxWind, wave/maxWave) + calculateVesselModifier(slot)))</code>, where each subclass computes a <code>0 to 15</code> point modifier.</li>
+          <li><strong>Pre-Departure Custom Exceptions:</strong> <code>VesselOvercapacityException</code> (crew, cargo tons, or passengers), <code>MissingSafetyGearException</code>, <code>UnsafeSeaConditionException</code>, and <code>BmkgApiUnavailableException</code>.</li>
+        </ul>
+      </div>
     </section>
   </main>
 
   <footer class="footer">
-    <span><strong>NelayanSafe</strong> — Advanced Programming (Java OOP) Maritime Safety System</span>
+    <span><strong>Maritime Sailing Safety and Departure Window System</strong> (Group 3, Advanced Programming, Offering INT)</span>
     <span>Data Source: <strong>BMKG</strong> (<a href="https://maritim.bmkg.go.id" target="_blank" rel="noopener">maritim.bmkg.go.id</a>)</span>
   </footer>
 

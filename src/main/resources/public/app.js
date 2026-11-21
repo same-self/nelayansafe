@@ -18,6 +18,7 @@ const el = (id) => document.getElementById(id);
 document.addEventListener("DOMContentLoaded", async () => {
   bindTabs();
   bindEvents();
+  toggleSubclassSpecFields(el("vesselType").value);
   await loadZoneCatalog(false);
   await evaluateActiveZone(false);
   await loadClearanceLogs();
@@ -36,15 +37,50 @@ function bindTabs() {
   });
 }
 
+function toggleSubclassSpecFields(vesselType) {
+  const map = {
+    SmallFishingBoat: "specsSmallFishingBoat",
+    BargeVessel: "specsBargeVessel",
+    PassengerFerry: "specsPassengerFerry",
+    CargoShip: "specsCargoShip"
+  };
+  Object.values(map).forEach((id) => el(id)?.classList.add("hidden"));
+  const activeId = map[vesselType];
+  if (activeId) el(activeId)?.classList.remove("hidden");
+}
+
 function bindEvents() {
   el("vesselType").addEventListener("change", () => {
-    el("maxCrew").value = VESSEL_DEFAULTS[el("vesselType").value] || 6;
+    const type = el("vesselType").value;
+    el("maxCrew").value = VESSEL_DEFAULTS[type] || 6;
+    toggleSubclassSpecFields(type);
     evaluateActiveZone(false);
+    if (el("routeTab").classList.contains("active") || !el("routeSummaryBox").classList.contains("hidden")) {
+      analyzeRoute();
+    }
     updateClearanceSummary();
   });
 
   ["vesselName", "vesselId", "maxCrew", "crewCount", "hasLifeJackets", "hasWorkingRadio"].forEach((id) => {
     el(id).addEventListener("change", updateClearanceSummary);
+  });
+
+  [
+    "grossTonnage",
+    "maxSafeCurrentKnots",
+    "maxCargoTon",
+    "currentCargoTon",
+    "maxPassengers",
+    "currentPassengers",
+    "maxContainerTEU"
+  ].forEach((id) => {
+    el(id).addEventListener("change", () => {
+      evaluateActiveZone(false);
+      if (el("routeTab").classList.contains("active") || !el("routeSummaryBox").classList.contains("hidden")) {
+        analyzeRoute();
+      }
+      updateClearanceSummary();
+    });
   });
 
   el("provinceSelect").addEventListener("change", () => {
@@ -92,11 +128,21 @@ function getVesselParams() {
     crewCount: Number(el("crewCount").value) || 1,
     lifeJackets: el("hasLifeJackets").checked,
     radio: el("hasWorkingRadio").checked,
+    grossTonnage: Number(el("grossTonnage").value) || 5.0,
+    maxSafeCurrentKnots: Number(el("maxSafeCurrentKnots").value) || 2.0,
+    maxCargoTon: Number(el("maxCargoTon").value) || 3000,
+    currentCargoTon: Number(el("currentCargoTon").value) || 0,
+    maxPassengers: Number(el("maxPassengers").value) || 300,
+    currentPassengers: Number(el("currentPassengers").value) || 0,
+    maxContainerTEU: Number(el("maxContainerTEU").value) || 1200,
     simulate: el("simulateStormToggle").checked
   };
 }
 
 async function applyScenarioPreset(preset) {
+  el("grossTonnage").value = 5.0;
+  el("maxSafeCurrentKnots").value = 2.0;
+
   if (preset === "safe") {
     el("vesselType").value = "SmallFishingBoat";
     el("vesselName").value = "KM Nelayan Sejahtera";
@@ -131,6 +177,7 @@ async function applyScenarioPreset(preset) {
     el("simulateStormToggle").checked = true;
   }
 
+  toggleSubclassSpecFields(el("vesselType").value);
   el("cautionAckCheckbox").checked = false;
   el("clearanceResultBox").classList.add("hidden");
 
@@ -165,7 +212,7 @@ async function loadZoneCatalog(refresh) {
         state.zoneNamesByCode[a.areaCode] = a.areaName;
         const rOpt = document.createElement("option");
         rOpt.value = a.areaCode;
-        rOpt.textContent = `${p.province} — ${a.areaName} (${a.areaCode})`;
+        rOpt.textContent = `${p.province}: ${a.areaName} (${a.areaCode})`;
         routeAdder.appendChild(rOpt);
       });
     });
@@ -215,6 +262,13 @@ async function evaluateActiveZone(refresh) {
     maxCrew: String(v.maxCrew),
     lifeJackets: String(v.lifeJackets),
     radio: String(v.radio),
+    grossTonnage: String(v.grossTonnage),
+    maxSafeCurrentKnots: String(v.maxSafeCurrentKnots),
+    maxCargoTon: String(v.maxCargoTon),
+    currentCargoTon: String(v.currentCargoTon),
+    maxPassengers: String(v.maxPassengers),
+    currentPassengers: String(v.currentPassengers),
+    maxContainerTEU: String(v.maxContainerTEU),
     refresh: String(refresh),
     simulate: String(v.simulate)
   });
@@ -230,8 +284,14 @@ async function evaluateActiveZone(refresh) {
     render24HourChart(data.windowAnalysis);
     updateClearanceSummary();
   } catch (err) {
-    el("verdictBanner")?.classList.add("verdict-DO_NOT_SAIL");
-    el("verdictTitle").textContent = `Error loading forecast: ${err.message}`;
+    const banner = el("zoneVerdictBanner");
+    if (banner) {
+      banner.className = "verdict-banner verdict-DO_NOT_SAIL";
+    }
+    el("verdictBadge").textContent = "ERROR";
+    el("verdictTitle").textContent = `Unable to load forecast: ${err.message}`;
+    el("verdictMeta").textContent = "Check BMKG API availability or vessel input values.";
+    el("verdictScore").textContent = "--";
   }
 }
 
@@ -254,9 +314,9 @@ function renderZoneVerdict(zone, slot, evalObj) {
   const banner = el("zoneVerdictBanner");
   banner.className = `verdict-banner verdict-${evalObj.status}`;
   el("verdictBadge").textContent = evalObj.status.replaceAll("_", " ");
-  el("verdictTitle").textContent = `${zone.areaName} (${zone.areaCode}) — ${evalObj.summary}`;
+  el("verdictTitle").textContent = `${zone.areaName} (${zone.areaCode}): ${evalObj.summary}`;
   el("verdictMeta").textContent =
-    `Station: ${zone.stationName} • Slot: ${slot.timeWib} (${slot.timeUtc}) • Limits: Wind ≤ ${evalObj.maxSafeWindKnots} kt, Wave ≤ ${evalObj.maxSafeWaveMeters} m`;
+    `Station: ${zone.stationName} • Slot: ${slot.timeWib} (${slot.timeUtc}) • Limits: Wind < ${evalObj.maxSafeWindKnots} kt, Wave < ${evalObj.maxSafeWaveMeters} m`;
   el("verdictScore").textContent = evalObj.riskScore;
 
   const list = el("verdictReasons");
@@ -284,7 +344,7 @@ function render24HourChart(analysis) {
     : "callout-danger");
   recBox.textContent = analysis.recommendationMessage;
   state.lastRecommendedWindow = analysis.recommendedWindow
-    ? `${analysis.recommendedWindow.startTimeWib} – ${analysis.recommendedWindow.endTimeWib}`
+    ? `${analysis.recommendedWindow.startTimeWib} to ${analysis.recommendedWindow.endTimeWib}`
     : "Postpone Departure";
 
   const chart = el("hourlyChart");
@@ -293,7 +353,7 @@ function render24HourChart(analysis) {
     const col = document.createElement("div");
     col.className = "hour-col";
     const heightPct = Math.max(12, pt.evaluation.riskScore);
-    const shortHour = pt.slot.timeWib.replace(" WIB", "");
+    const shortHour = pt.slot.timeWib.replace(/\s+(WIB|WITA|WIT)$/, "");
     col.innerHTML = `
       <span class="hour-score">${pt.evaluation.riskScore}</span>
       <div class="hour-bar bar-${pt.evaluation.status}" style="height: ${heightPct}%"></div>
@@ -301,7 +361,7 @@ function render24HourChart(analysis) {
     `;
     col.addEventListener("click", () => {
       el("hourlyInspector").innerHTML =
-        `<strong>${pt.slot.timeWib} (${pt.slot.timeUtc}):</strong> Status <strong>${pt.evaluation.status}</strong> (Risk ${pt.evaluation.riskScore}/100) — ` +
+        `<strong>${pt.slot.timeWib} (${pt.slot.timeUtc}):</strong> Status <strong>${pt.evaluation.status}</strong> (Risk ${pt.evaluation.riskScore}/100) | ` +
         `Wave <strong>${pt.slot.waveHeight} m</strong> (${pt.slot.waveCat}), Wind <strong>${pt.slot.windSpeed} kt</strong> (Gust ${pt.slot.windGust} kt), Current <strong>${pt.slot.currentSpeed} kt</strong>, Weather: ${pt.slot.weather}`;
     });
     chart.appendChild(col);
@@ -327,49 +387,68 @@ function renderRouteChips() {
 async function analyzeRoute() {
   if (state.routeCodes.length === 0) return;
   const v = getVesselParams();
-  const res = await fetch("/api/route", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...v,
-      areaCodes: state.routeCodes
-    })
-  });
-  const data = await res.json();
-  if (!data.success) {
-    alert(data.message);
-    return;
-  }
-
-  const re = data.routeEvaluation;
   const box = el("routeSummaryBox");
-  box.className = `verdict-banner verdict-${re.overallStatus}`;
-  box.classList.remove("hidden");
-  el("routeStatusPill").textContent = re.overallStatus.replaceAll("_", " ");
-  el("routeSummaryText").textContent = re.summary;
-  el("routeBottleneckMeta").textContent = `Bottleneck Zone: ${re.bottleneckAreaName} (${re.bottleneckAreaCode})`;
-  el("routePeakScore").textContent = re.highestRiskScore;
+  try {
+    const res = await fetch("/api/route", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...v,
+        areaCodes: state.routeCodes
+      })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message);
 
-  const grid = el("routeSegmentsGrid");
-  grid.innerHTML = "";
-  re.segments.forEach((seg, i) => {
-    const card = document.createElement("div");
-    card.className = "segment-card";
-    card.innerHTML = `
-      <span class="status-pill" style="margin-bottom:0.4rem;">Segment ${i + 1}: ${seg.evaluation.status}</span>
-      <h4 style="margin:0.25rem 0;">${seg.areaName} (${seg.areaCode})</h4>
-      <p class="muted" style="margin:0 0 0.5rem 0;">${seg.province} • Risk Score: <strong>${seg.evaluation.riskScore}/100</strong></p>
-      <p style="margin:0; font-size:0.85rem;">Wave: <strong>${seg.currentSlot.waveHeight} m</strong> | Wind: <strong>${seg.currentSlot.windSpeed} kt</strong> | Current: <strong>${seg.currentSlot.currentSpeed} kt</strong></p>
-    `;
-    grid.appendChild(card);
-  });
+    const re = data.routeEvaluation;
+    box.className = `verdict-banner verdict-${re.overallStatus}`;
+    box.classList.remove("hidden");
+    el("routeStatusPill").textContent = re.overallStatus.replaceAll("_", " ");
+    el("routeSummaryText").textContent = re.summary;
+    el("routeBottleneckMeta").textContent = `Bottleneck Zone: ${re.bottleneckAreaName} (${re.bottleneckAreaCode})`;
+    el("routePeakScore").textContent = re.highestRiskScore;
+
+    const grid = el("routeSegmentsGrid");
+    grid.innerHTML = "";
+    re.segments.forEach((seg, i) => {
+      const card = document.createElement("div");
+      card.className = "segment-card";
+      card.innerHTML = `
+        <span class="status-pill" style="margin-bottom:0.4rem;">Segment ${i + 1}: ${seg.evaluation.status}</span>
+        <h4 style="margin:0.25rem 0;">${seg.areaName} (${seg.areaCode})</h4>
+        <p class="muted" style="margin:0 0 0.5rem 0;">${seg.province} • Risk Score: <strong>${seg.evaluation.riskScore}/100</strong></p>
+        <p style="margin:0; font-size:0.85rem;">Wave: <strong>${seg.currentSlot.waveHeight} m</strong> | Wind: <strong>${seg.currentSlot.windSpeed} kt</strong> | Current: <strong>${seg.currentSlot.currentSpeed} kt</strong></p>
+      `;
+      grid.appendChild(card);
+    });
+  } catch (err) {
+    box.className = "verdict-banner verdict-DO_NOT_SAIL";
+    box.classList.remove("hidden");
+    el("routeStatusPill").textContent = "ERROR";
+    el("routeSummaryText").textContent = `Route evaluation failed: ${err.message}`;
+    el("routeBottleneckMeta").textContent = "";
+    el("routePeakScore").textContent = "--";
+  }
+}
+
+function formatSubclassDetail(v) {
+  if (v.vesselType === "SmallFishingBoat") {
+    return `${v.grossTonnage} GT, Max Current: ${v.maxSafeCurrentKnots} kt`;
+  }
+  if (v.vesselType === "BargeVessel") {
+    return `Cargo: ${v.currentCargoTon}/${v.maxCargoTon} tons`;
+  }
+  if (v.vesselType === "PassengerFerry") {
+    return `Passengers: ${v.currentPassengers}/${v.maxPassengers}`;
+  }
+  return `Containers: ${v.maxContainerTEU} TEU`;
 }
 
 function updateClearanceSummary() {
   const v = getVesselParams();
   const activeZones = state.routeCodes.length > 0 ? state.routeCodes : [el("zoneSelect").value || "P.AE.09"];
   el("clrVesselSummary").textContent =
-    `${v.vesselName} (${v.vesselType}) — Crew: ${v.crewCount}/${v.maxCrew} | Life Jackets: ${v.lifeJackets ? "OK" : "MISSING"} | Radio: ${v.radio ? "OK" : "MISSING"}`;
+    `${v.vesselName} (${v.vesselType}) | Crew: ${v.crewCount}/${v.maxCrew} | ${formatSubclassDetail(v)} | Life Jackets: ${v.lifeJackets ? "OK" : "MISSING"} | Radio: ${v.radio ? "OK" : "MISSING"}`;
   el("clrRouteSummary").textContent = activeZones.map((c) => `${state.zoneNamesByCode[c] || c} (${c})`).join(" → ");
   el("clrWindowSummary").textContent = state.lastRecommendedWindow;
 }

@@ -60,10 +60,10 @@ public class NelayanSafeWebServer {
         server.createContext("/", this::handleStatic);
 
         server.start();
-        System.out.println("====================================================");
-        System.out.println(" NelayanSafe Web Server running on port " + port);
+        System.out.println("===================================================================");
+        System.out.println(" Maritime Sailing Safety and Departure Window System on port " + port);
         System.out.println(" Open locally: http://localhost:" + port);
-        System.out.println("====================================================");
+        System.out.println("===================================================================");
     }
 
     private void handleZones(HttpExchange ex) throws IOException {
@@ -207,7 +207,7 @@ public class NelayanSafeWebServer {
         if (handleCorsPreflight(ex)) return;
         byte[] bytes = clearanceService.generateCsvContent().getBytes(StandardCharsets.UTF_8);
         ex.getResponseHeaders().set("Content-Type", "text/csv; charset=utf-8");
-        ex.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"nelayansafe_clearances.csv\"");
+        ex.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"maritime_safety_clearances.csv\"");
         ex.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
         ex.sendResponseHeaders(200, bytes.length);
         try (OutputStream os = ex.getResponseBody()) {
