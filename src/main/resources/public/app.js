@@ -61,7 +61,9 @@ function bindEvents() {
 
   el("simulateStormToggle").addEventListener("change", () => {
     evaluateActiveZone(false);
-    analyzeRoute();
+    if (el("routeTab").classList.contains("active") || !el("routeSummaryBox").classList.contains("hidden")) {
+      analyzeRoute();
+    }
   });
 
   el("addRouteZoneBtn").addEventListener("click", () => {
@@ -113,22 +115,29 @@ async function applyScenarioPreset(preset) {
     el("simulateStormToggle").checked = false;
   } else if (preset === "missingGear") {
     el("vesselType").value = "SmallFishingBoat";
-    el("vesselName").value = "KM Sinar Pagi";
+    el("vesselName").value = "KM Maritim (Safety Case)";
     el("maxCrew").value = 6;
-    el("crewCount").value = 4;
+    el("crewCount").value = 5;
     el("hasLifeJackets").checked = false;
-    el("hasWorkingRadio").checked = false;
+    el("hasWorkingRadio").checked = true;
     el("simulateStormToggle").checked = false;
   } else if (preset === "storm") {
     el("vesselType").value = "SmallFishingBoat";
-    el("vesselName").value = "KM Maritim Demo";
+    el("vesselName").value = "KM Nelayan Storm Test";
     el("maxCrew").value = 6;
     el("crewCount").value = 5;
     el("hasLifeJackets").checked = true;
     el("hasWorkingRadio").checked = true;
     el("simulateStormToggle").checked = true;
   }
+
+  el("cautionAckCheckbox").checked = false;
+  el("clearanceResultBox").classList.add("hidden");
+
   await evaluateActiveZone(false);
+  if (el("routeTab").classList.contains("active") || !el("routeSummaryBox").classList.contains("hidden")) {
+    await analyzeRoute();
+  }
   updateClearanceSummary();
 }
 
@@ -231,7 +240,7 @@ function updateConnectionBadge(mode) {
   badge.className = "badge";
   if (mode === "SIMULATED_STORM") {
     badge.classList.add("badge-sim");
-    badge.textContent = "STORM SIMULATION MODE";
+    badge.textContent = "HIGH-WAVE STORM SIMULATION";
   } else if (mode === "LIVE_BMKG") {
     badge.classList.add("badge-live");
     badge.textContent = "● LIVE BMKG API";

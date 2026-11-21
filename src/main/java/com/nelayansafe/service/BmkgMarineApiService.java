@@ -257,12 +257,13 @@ public class BmkgMarineApiService {
 
     private SeaZone buildSimulatedStormZone(String code) {
         SeaZone meta = indexByCode.get(code);
-        String name = meta != null ? meta.getAreaName() : "Perairan Kepulauan Natuna (Simulated Storm)";
-        String province = meta != null ? meta.getProvince() : "Kepulauan Riau";
+        String name = meta != null ? meta.getAreaName() : "Simulated High-Wave Sea Zone";
+        String province = meta != null ? meta.getProvince() : "Indonesia";
 
         SeaZone zone = new SeaZone(code, name, province);
-        zone.setStationName("SIMULATED BMKG ADVISORY (NOV 2026 NATUNA PROFILE)");
-        zone.setIssuedUtc(ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:00 'UTC'")));
+        zone.setStationName("SIMULATED HIGH-WAVE ADVISORY (DEMO TEST PROFILE)");
+        zone.setIssuedUtc(ZonedDateTime.now(ZoneOffset.UTC)
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:00 'UTC'")));
         zone.setValidFromUtc("24h Simulation Window");
         zone.setValidToUtc("+24h");
         zone.setDataSourceMode("SIMULATED_STORM");
@@ -279,22 +280,42 @@ public class BmkgMarineApiService {
             double wind;
             double gust;
             double current;
+            double tempAvg;
+            double rhAvg;
             String weather;
             String waveCat;
 
-            if (h >= 3 && h <= 14) {
-                wave = 1.85 + Math.sin((h - 3) / 11.0 * Math.PI) * 0.60; // 1.85 - 2.45 m
-                wind = 17.0 + Math.sin((h - 3) / 11.0 * Math.PI) * 5.0;  // 17 - 22 kt
-                gust = wind + 7.0;
+            if (h <= 8) {
+                // Active high-wave storm immediately (h=0..8): DO_NOT_SAIL for SmallFishingBoat & BargeVessel
+                double progress = h / 8.0;
+                wave = 1.95 + Math.sin(progress * Math.PI) * 0.50; // 1.95 - 2.45 m
+                wind = 18.0 + Math.sin(progress * Math.PI) * 4.0;  // 18.0 - 22.0 kt
+                gust = wind + 6.5;                                 // 24.5 - 28.5 kt
                 current = 1.65;
+                tempAvg = 26.5;
+                rhAvg = 88.0;
                 weather = "Hujan Lebat & Angin Kencang";
                 waveCat = "Sedang";
+            } else if (h <= 11) {
+                // Transition phase (h=9..11): storm subsiding -> CAUTION for SmallFishingBoat
+                int step = h - 9;
+                wave = 1.15 - (step * 0.05); // 1.15, 1.10, 1.05 m
+                wind = 13.0 - (step * 0.5);  // 13.0, 12.5, 12.0 kt
+                gust = wind + 4.5;           // 17.5, 17.0, 16.5 kt
+                current = 1.25;
+                tempAvg = 27.5;
+                rhAvg = 83.0;
+                weather = "Berawan Tebal";
+                waveCat = "Rendah";
             } else {
-                wave = 1.05;
-                wind = 11.0;
-                gust = 16.0;
-                current = 0.95;
-                weather = "Berawan";
+                // Calm recovery window (h=12..23): 12 consecutive SAFE hours for all vessel classes
+                wave = 0.70;
+                wind = 9.0;
+                gust = 13.0;
+                current = 0.85;
+                tempAvg = 28.5;
+                rhAvg = 78.0;
+                weather = "Cerah Berawan";
                 waveCat = "Rendah";
             }
 
@@ -302,8 +323,8 @@ public class BmkgMarineApiService {
                     utcStr,
                     wibStr,
                     weather,
-                    26.5,
-                    88.0,
+                    tempAvg,
+                    rhAvg,
                     "Timur Laut",
                     Math.round(wind * 10.0) / 10.0,
                     Math.round(gust * 10.0) / 10.0,
