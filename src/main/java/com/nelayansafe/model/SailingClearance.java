@@ -24,12 +24,23 @@ public class SailingClearance {
 
     @SerializedName(value = "issuedTimestampLocal", alternate = {"issuedTimestampWib"})
     private String issuedTimestampLocal;
+    private String departureTimezone;
 
     public SailingClearance(String clearanceId, Vessel vessel, int crewCount,
                             List<String> routeZoneCodes, List<String> routeZoneNames,
                             int riskScore, SafetyStatus safetyStatus,
                             String recommendedWindow, boolean cautionAcknowledged,
                             String issuedTimestampLocal) {
+        this(clearanceId, vessel, crewCount, routeZoneCodes, routeZoneNames,
+                riskScore, safetyStatus, recommendedWindow, cautionAcknowledged,
+                issuedTimestampLocal, null);
+    }
+
+    public SailingClearance(String clearanceId, Vessel vessel, int crewCount,
+                            List<String> routeZoneCodes, List<String> routeZoneNames,
+                            int riskScore, SafetyStatus safetyStatus,
+                            String recommendedWindow, boolean cautionAcknowledged,
+                            String issuedTimestampLocal, String departureTimezone) {
         this.clearanceId = clearanceId;
         this.vesselId = vessel.getVesselId();
         this.vesselName = vessel.getVesselName();
@@ -45,6 +56,7 @@ public class SailingClearance {
         this.recommendedWindow = recommendedWindow;
         this.cautionAcknowledged = cautionAcknowledged;
         this.issuedTimestampLocal = issuedTimestampLocal;
+        this.departureTimezone = departureTimezone;
     }
 
     public String getClearanceId() { return clearanceId; }
@@ -62,4 +74,5 @@ public class SailingClearance {
     public String getRecommendedWindow() { return recommendedWindow; }
     public boolean isCautionAcknowledged() { return cautionAcknowledged; }
     public String getIssuedTimestampLocal() { return issuedTimestampLocal; }
+    public String getDepartureTimezone() { return departureTimezone; }
 }

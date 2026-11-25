@@ -54,6 +54,17 @@ public abstract class Vessel {
         this.hasWorkingRadio = hasWorkingRadio;
     }
 
+    public static int defaultMaxCrewFor(String vesselType) {
+        String normalized = vesselType == null ? "" : vesselType.trim();
+        return switch (normalized) {
+            case "SmallFishingBoat" -> 6;
+            case "BargeVessel" -> 12;
+            case "PassengerFerry" -> 150;
+            case "CargoShip" -> 40;
+            default -> 6;
+        };
+    }
+
     public static Vessel create(String vesselType, String vesselId, String vesselName,
                                 int maxCrewCapacity, boolean hasLifeJackets, boolean hasWorkingRadio) {
         return create(vesselType, vesselId, vesselName, maxCrewCapacity,
@@ -67,19 +78,19 @@ public abstract class Vessel {
         String normalized = vesselType == null ? "" : vesselType.trim();
         return switch (normalized) {
             case "SmallFishingBoat" ->
-                new SmallFishingBoat(vesselId, vesselName, maxCrewCapacity > 0 ? maxCrewCapacity : 6,
+                new SmallFishingBoat(vesselId, vesselName, maxCrewCapacity,
                         hasLifeJackets, hasWorkingRadio,
                         opts.grossTonnage(), opts.maxSafeCurrentKnots());
             case "BargeVessel" ->
-                new BargeVessel(vesselId, vesselName, maxCrewCapacity > 0 ? maxCrewCapacity : 12,
+                new BargeVessel(vesselId, vesselName, maxCrewCapacity,
                         hasLifeJackets, hasWorkingRadio,
                         opts.maxCargoTon(), opts.currentCargoTon());
             case "PassengerFerry" ->
-                new PassengerFerry(vesselId, vesselName, maxCrewCapacity > 0 ? maxCrewCapacity : 150,
+                new PassengerFerry(vesselId, vesselName, maxCrewCapacity,
                         hasLifeJackets, hasWorkingRadio,
                         opts.maxPassengers(), opts.currentPassengers());
             case "CargoShip" ->
-                new CargoShip(vesselId, vesselName, maxCrewCapacity > 0 ? maxCrewCapacity : 40,
+                new CargoShip(vesselId, vesselName, maxCrewCapacity,
                         hasLifeJackets, hasWorkingRadio,
                         opts.maxContainerTEU());
             default -> throw new IllegalArgumentException("Unsupported vessel class: " + vesselType);

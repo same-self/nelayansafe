@@ -138,6 +138,7 @@ class CustomExceptionsAndClearanceTest {
 
         SailingClearance issued = service.requestClearance(boat, 4, safeWitaRoute, "08:00 WITA to 12:00 WITA", false);
         assertNotNull(issued.getClearanceId());
+        assertEquals("WITA (UTC+8)", issued.getDepartureTimezone());
         assertTrue(issued.getIssuedTimestampLocal().endsWith("WITA"),
                 "Expected Sulawesi Selatan departure clearance timestamp in WITA, got: " + issued.getIssuedTimestampLocal());
 

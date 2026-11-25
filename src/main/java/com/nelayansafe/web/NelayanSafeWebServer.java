@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.nelayansafe.exception.BmkgApiUnavailableException;
 import com.nelayansafe.exception.MissingSafetyGearException;
@@ -89,6 +90,8 @@ public class NelayanSafeWebServer {
         if (handleCorsPreflight(ex)) return;
         try {
             Map<String, String> q = parseQuery(ex);
+            String vesselType = q.getOrDefault("vesselType", "SmallFishingBoat");
+            int defaultMaxCrew = Vessel.defaultMaxCrewFor(vesselType);
             Vessel.VesselOptions opts = new Vessel.VesselOptions(
                     parseDouble(q.get("grossTonnage"), 5.0),
                     parseDouble(q.get("maxSafeCurrentKnots"), 2.0),
@@ -99,10 +102,10 @@ public class NelayanSafeWebServer {
                     parseInt(q.get("maxContainerTEU"), 1200)
             );
             Vessel vessel = Vessel.create(
-                    q.getOrDefault("vesselType", "SmallFishingBoat"),
+                    vesselType,
                     q.getOrDefault("vesselId", "VSL-001"),
                     q.getOrDefault("vesselName", "KM Nelayan Sejahtera"),
-                    parseInt(q.get("maxCrew"), 6),
+                    parseInt(q.get("maxCrew"), defaultMaxCrew),
                     Boolean.parseBoolean(q.getOrDefault("lifeJackets", "true")),
                     Boolean.parseBoolean(q.getOrDefault("radio", "true")),
                     opts
@@ -154,7 +157,7 @@ public class NelayanSafeWebServer {
             sendJson(ex, 200, Map.of("success", true, "routeEvaluation", routeEval));
         } catch (BmkgApiUnavailableException e) {
             sendError(ex, 503, e.getClass().getSimpleName(), e.getMessage());
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException | JsonParseException | IllegalStateException e) {
             sendError(ex, 400, e.getClass().getSimpleName(), e.getMessage());
         } catch (Exception e) {
             sendError(ex, 500, e.getClass().getSimpleName(), e.getMessage());
@@ -170,7 +173,7 @@ public class NelayanSafeWebServer {
         try {
             JsonObject body = JsonParser.parseString(readBody(ex)).getAsJsonObject();
             Vessel vessel = vesselFromJson(body);
-            int crewCount = body.has("crewCount") ? body.get("crewCount").getAsInt() : 1;
+            int crewCount = parseRequiredIntOrDefault(body, "crewCount", 1);
             List<String> codes = readAreaCodes(body);
             boolean simulate = getBool(body, "simulate", false);
             boolean cautionAck = getBool(body, "cautionAcknowledged", false);
@@ -191,7 +194,7 @@ public class NelayanSafeWebServer {
             sendError(ex, 422, e.getClass().getSimpleName(), e.getMessage());
         } catch (BmkgApiUnavailableException e) {
             sendError(ex, 503, e.getClass().getSimpleName(), e.getMessage());
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException | JsonParseException | IllegalStateException e) {
             sendError(ex, 400, e.getClass().getSimpleName(), e.getMessage());
         } catch (Exception e) {
             sendError(ex, 500, e.getClass().getSimpleName(), e.getMessage());
@@ -246,7 +249,7 @@ public class NelayanSafeWebServer {
                 ? body.get("vesselId").getAsString() : "VSL-001";
         String name = body.has("vesselName") && !body.get("vesselName").isJsonNull()
                 ? body.get("vesselName").getAsString() : "KM Nelayan Sejahtera";
-        int maxCrew = getInt(body, "maxCrew", 6);
+        int maxCrew = getInt(body, "maxCrew", Vessel.defaultMaxCrewFor(type));
         boolean lifeJackets = getBool(body, "lifeJackets", true);
         boolean radio = getBool(body, "radio", true);
 
@@ -293,6 +296,15 @@ public class NelayanSafeWebServer {
             return Double.parseDouble(val.trim());
         } catch (NumberFormatException e) {
             return def;
+        }
+    }
+
+    private int parseRequiredIntOrDefault(JsonObject obj, String key, int def) {
+        if (!obj.has(key) || obj.get(key).isJsonNull()) return def;
+        try {
+            return obj.get(key).getAsInt();
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Field '" + key + "' must be a valid integer.");
         }
     }
 

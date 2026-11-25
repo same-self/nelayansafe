@@ -58,7 +58,7 @@ class BmkgApiFallbackAndTimezoneTest {
 
         BmkgMarineApiService.ZoneCatalog catalog = api.fetchZoneCatalog(false);
         assertEquals("OFFLINE_CACHE", catalog.sourceMode());
-        assertEquals(2, catalog.provinces().size());
+        assertEquals(3, catalog.provinces().size());
 
         // Perairan Sinjai (Sulawesi Selatan -> WITA)
         SeaZone sinjai = api.fetchZoneForecast("P.AE.09", false, false);
@@ -73,6 +73,13 @@ class BmkgApiFallbackAndTimezoneTest {
         assertEquals("WIB (UTC+7)", aceh.getTimezoneLabel());
         assertEquals(24, aceh.getDay1Slots().size());
         assertEquals("07:00 WIB", aceh.getDay1Slots().get(0).getTimeLocal());
+
+        // Perairan Selatan P. Biak (Papua -> WIT)
+        SeaZone biak = api.fetchZoneForecast("P.AL.04", false, false);
+        assertEquals("OFFLINE_CACHE", biak.getDataSourceMode());
+        assertEquals("WIT (UTC+9)", biak.getTimezoneLabel());
+        assertEquals(24, biak.getDay1Slots().size());
+        assertEquals("09:00 WIT", biak.getDay1Slots().get(0).getTimeLocal());
 
         // Stale offline fallback picks closest UTC time-of-day (within 1 hour of current UTC clock)
         MarineForecastSlot picked = api.pickCurrentSlot(sinjai);

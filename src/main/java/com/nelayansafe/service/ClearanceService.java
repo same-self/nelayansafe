@@ -105,7 +105,8 @@ public class ClearanceService {
                 routeEval.getOverallStatus(),
                 recommendedWindow == null || recommendedWindow.isBlank() ? "Immediate window checked" : recommendedWindow,
                 cautionAcknowledged,
-                IndonesianTimezoneResolver.formatLogNow(tz)
+                IndonesianTimezoneResolver.formatLogNow(tz),
+                tz.displayLabel()
         );
 
         logs.add(0, clearance);

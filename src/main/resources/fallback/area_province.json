@@ -11,6 +11,12 @@
       "areas": [
         { "id": "P.AE.09", "name": "Perairan Sinjai" }
       ]
+    },
+    {
+      "province": "Papua",
+      "areas": [
+        { "id": "P.AL.04", "name": "Perairan Selatan P. Biak" }
+      ]
     }
   ]
 }

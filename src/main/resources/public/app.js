@@ -61,6 +61,19 @@ function parseNumberInput(id, fallback) {
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
+function hideClearanceResult() {
+  const box = el("clearanceResultBox");
+  if (box) box.classList.add("hidden");
+}
+
+function inferTimezoneFromLocalStamp(stamp) {
+  const s = String(stamp || "").trim();
+  if (s.endsWith("WIB")) return "WIB (UTC+7)";
+  if (s.endsWith("WITA")) return "WITA (UTC+8)";
+  if (s.endsWith("WIT")) return "WIT (UTC+9)";
+  return "Local Time";
+}
+
 function renderRiskGaugeHtml(score, status, scoreId, label) {
   const numeric = typeof score === "number" && !Number.isNaN(score)
     ? Math.max(0, Math.min(100, score))
@@ -123,6 +136,9 @@ function activateTab(tabId, focusTab = false) {
       analyzeRoute(false);
     }
   } else if (tabId === "clearanceTab") {
+    if (state.clearanceScope === "multiZone" && state.routeCodes.length > 0 && (state.routeDirty || !state.lastRouteData)) {
+      analyzeRoute(false);
+    }
     updateClearanceSummary();
   }
 }
@@ -185,7 +201,9 @@ function toggleSubclassSpecFields(vesselType) {
 function setActivePreset(presetName) {
   state.activePreset = presetName;
   document.querySelectorAll(".btn-chip").forEach((btn) => {
-    btn.classList.toggle("active-preset", Boolean(presetName) && btn.dataset.preset === presetName);
+    const isActive = Boolean(presetName) && btn.dataset.preset === presetName;
+    btn.classList.toggle("active-preset", isActive);
+    btn.setAttribute("aria-pressed", String(isActive));
   });
 }
 
@@ -194,24 +212,64 @@ function updateStormSimulationBanner() {
   el("stormSimBanner").classList.toggle("hidden", !isSim);
 }
 
+function getProfileValidationIssues(v) {
+  const crewInvalid = v.crewCount <= 0;
+  const maxCrewInvalid = v.maxCrew <= 0;
+  const crewOverloaded = !crewInvalid && !maxCrewInvalid && v.crewCount > v.maxCrew;
+  const cargoOverloaded = v.vesselType === "BargeVessel" && v.maxCargoTon > 0 && v.currentCargoTon > v.maxCargoTon;
+  const paxOverloaded = v.vesselType === "PassengerFerry" && v.maxPassengers > 0 && v.currentPassengers > v.maxPassengers;
+
+  let subclassInvalidMsg = "";
+  if (v.vesselType === "SmallFishingBoat") {
+    if (v.grossTonnage <= 0) subclassInvalidMsg = "Gross Tonnage (GT) must be positive (triggers IllegalArgumentException).";
+    else if (v.maxSafeCurrentKnots <= 0) subclassInvalidMsg = "Max Safe Current (kt) must be positive (triggers IllegalArgumentException).";
+  } else if (v.vesselType === "BargeVessel") {
+    if (v.maxCargoTon <= 0) subclassInvalidMsg = "Max Cargo (Tons) must be positive (triggers IllegalArgumentException).";
+    else if (v.currentCargoTon < 0) subclassInvalidMsg = "Current Cargo (Tons) cannot be negative (triggers IllegalArgumentException).";
+  } else if (v.vesselType === "PassengerFerry") {
+    if (v.maxPassengers <= 0) subclassInvalidMsg = "Max Passengers must be positive (triggers IllegalArgumentException).";
+    else if (v.currentPassengers < 0) subclassInvalidMsg = "Passengers Onboard cannot be negative (triggers IllegalArgumentException).";
+  } else if (v.vesselType === "CargoShip") {
+    if (v.maxContainerTEU <= 0) subclassInvalidMsg = "Max Containers (TEU) must be positive (triggers IllegalArgumentException).";
+  }
+
+  return {
+    crewInvalid,
+    maxCrewInvalid,
+    crewOverloaded,
+    cargoOverloaded,
+    paxOverloaded,
+    subclassInvalidMsg,
+    grossTonnageInvalid: v.vesselType === "SmallFishingBoat" && v.grossTonnage <= 0,
+    currentLimitInvalid: v.vesselType === "SmallFishingBoat" && v.maxSafeCurrentKnots <= 0,
+    maxCargoInvalid: v.vesselType === "BargeVessel" && v.maxCargoTon <= 0,
+    currentCargoInvalid: v.vesselType === "BargeVessel" && v.currentCargoTon < 0,
+    maxPaxInvalid: v.vesselType === "PassengerFerry" && v.maxPassengers <= 0,
+    currentPaxInvalid: v.vesselType === "PassengerFerry" && v.currentPassengers < 0,
+    teuInvalid: v.vesselType === "CargoShip" && v.maxContainerTEU <= 0
+  };
+}
+
 function updateReadinessAndCompactSummary() {
   const v = getVesselParams();
+  const issues = getProfileValidationIssues(v);
   const warnings = [];
 
-  const crewInvalid = v.crewCount <= 0 || v.maxCrew <= 0;
-  const crewOverloaded = v.crewCount > v.maxCrew;
-  const cargoOverloaded = v.vesselType === "BargeVessel" && v.currentCargoTon > v.maxCargoTon;
-  const paxOverloaded = v.vesselType === "PassengerFerry" && v.currentPassengers > v.maxPassengers;
-
-  if (crewInvalid) {
-    warnings.push("Invalid crew value (triggers IllegalArgumentException)");
-  } else if (crewOverloaded) {
+  if (issues.maxCrewInvalid) {
+    warnings.push("Max Crew must be at least 1 (triggers IllegalArgumentException)");
+  }
+  if (issues.crewInvalid) {
+    warnings.push("Crew Onboard must be at least 1 (triggers IllegalArgumentException)");
+  } else if (issues.crewOverloaded) {
     warnings.push(`Crew Overcapacity: ${v.crewCount}/${v.maxCrew} (VesselOvercapacityException)`);
   }
-  if (cargoOverloaded) {
+  if (issues.subclassInvalidMsg) {
+    warnings.push(issues.subclassInvalidMsg);
+  }
+  if (issues.cargoOverloaded) {
     warnings.push(`Cargo Overcapacity: ${v.currentCargoTon}/${v.maxCargoTon} t (VesselOvercapacityException)`);
   }
-  if (paxOverloaded) {
+  if (issues.paxOverloaded) {
     warnings.push(`Passenger Overcapacity: ${v.currentPassengers}/${v.maxPassengers} (VesselOvercapacityException)`);
   }
   if (!v.lifeJackets && !v.radio) {
@@ -223,10 +281,15 @@ function updateReadinessAndCompactSummary() {
   }
 
   // Non-blocking field warning highlights
-  el("crewCount").classList.toggle("input-warning", crewInvalid || crewOverloaded);
-  el("maxCrew").classList.toggle("input-warning", v.maxCrew <= 0);
-  el("currentCargoTon").classList.toggle("input-warning", cargoOverloaded);
-  el("currentPassengers").classList.toggle("input-warning", paxOverloaded);
+  el("crewCount").classList.toggle("input-warning", issues.crewInvalid || issues.crewOverloaded);
+  el("maxCrew").classList.toggle("input-warning", issues.maxCrewInvalid);
+  el("grossTonnage").classList.toggle("input-warning", issues.grossTonnageInvalid);
+  el("maxSafeCurrentKnots").classList.toggle("input-warning", issues.currentLimitInvalid);
+  el("maxCargoTon").classList.toggle("input-warning", issues.maxCargoInvalid);
+  el("currentCargoTon").classList.toggle("input-warning", issues.cargoOverloaded || issues.currentCargoInvalid);
+  el("maxPassengers").classList.toggle("input-warning", issues.maxPaxInvalid);
+  el("currentPassengers").classList.toggle("input-warning", issues.paxOverloaded || issues.currentPaxInvalid);
+  el("maxContainerTEU").classList.toggle("input-warning", issues.teuInvalid);
   el("lifeJacketLabel").classList.toggle("label-warning", !v.lifeJackets);
   el("radioLabel").classList.toggle("label-warning", !v.radio);
 
@@ -251,10 +314,13 @@ function updateReadinessAndCompactSummary() {
 function handleProfileEvaluationChange() {
   setActivePreset(null);
   state.routeDirty = true;
+  hideClearanceResult();
   updateStormSimulationBanner();
   updateReadinessAndCompactSummary();
   evaluateActiveZone(false);
-  if (el("routeTab").classList.contains("active") && state.routeCodes.length > 0) {
+  const needsRouteNow = el("routeTab").classList.contains("active")
+    || (el("clearanceTab").classList.contains("active") && state.clearanceScope === "multiZone");
+  if (needsRouteNow && state.routeCodes.length > 0) {
     analyzeRoute(false);
   }
   updateClearanceSummary();
@@ -281,21 +347,32 @@ function bindEvents() {
     handleProfileEvaluationChange();
   });
 
-  ["vesselName", "vesselId", "maxCrew", "crewCount"].forEach((id) => {
+  ["vesselName", "vesselId", "crewCount"].forEach((id) => {
     el(id).addEventListener("input", () => {
       setActivePreset(null);
+      hideClearanceResult();
       updateReadinessAndCompactSummary();
       updateClearanceSummary();
     });
     el(id).addEventListener("change", () => {
+      hideClearanceResult();
       updateReadinessAndCompactSummary();
       updateClearanceSummary();
     });
   });
 
+  el("maxCrew").addEventListener("input", () => {
+    setActivePreset(null);
+    hideClearanceResult();
+    updateReadinessAndCompactSummary();
+    updateClearanceSummary();
+  });
+  el("maxCrew").addEventListener("change", handleProfileEvaluationChange);
+
   ["hasLifeJackets", "hasWorkingRadio"].forEach((id) => {
     el(id).addEventListener("change", () => {
       setActivePreset(null);
+      hideClearanceResult();
       updateReadinessAndCompactSummary();
       updateClearanceSummary();
     });
@@ -312,6 +389,7 @@ function bindEvents() {
   ].forEach((id) => {
     el(id).addEventListener("input", () => {
       setActivePreset(null);
+      hideClearanceResult();
       updateReadinessAndCompactSummary();
       updateClearanceSummary();
     });
@@ -320,11 +398,13 @@ function bindEvents() {
 
   el("provinceSelect").addEventListener("change", () => {
     populateZoneDropdown(el("provinceSelect").value);
+    hideClearanceResult();
     updateClearanceSummary();
     evaluateActiveZone(false);
   });
 
   el("zoneSelect").addEventListener("change", () => {
+    hideClearanceResult();
     updateClearanceSummary();
     evaluateActiveZone(false);
   });
@@ -339,7 +419,9 @@ function bindEvents() {
       await loadZoneCatalog(true);
       await evaluateActiveZone(true);
       state.routeDirty = true;
-      if (el("routeTab").classList.contains("active") && state.routeCodes.length > 0) {
+      const needsRouteRefresh = el("routeTab").classList.contains("active")
+        || (el("clearanceTab").classList.contains("active") && state.clearanceScope === "multiZone");
+      if (needsRouteRefresh && state.routeCodes.length > 0) {
         await analyzeRoute(true);
       }
       updateClearanceSummary();
@@ -386,12 +468,16 @@ function bindEvents() {
   document.querySelectorAll("input[name='clearanceScope']").forEach((radio) => {
     radio.addEventListener("change", () => {
       state.clearanceScope = radio.value;
-      el("clearanceResultBox").classList.add("hidden");
+      hideClearanceResult();
+      if (state.clearanceScope === "multiZone" && state.routeCodes.length > 0 && (state.routeDirty || !state.lastRouteData)) {
+        analyzeRoute(false);
+      }
       updateClearanceSummary();
     });
   });
 
   el("cautionAckCheckbox").addEventListener("change", () => {
+    hideClearanceResult();
     updateClearanceSummary();
   });
 
@@ -399,6 +485,11 @@ function bindEvents() {
 
   document.querySelectorAll(".btn-chip").forEach((btn) => {
     btn.addEventListener("click", () => applyScenarioPreset(btn.dataset.preset));
+    btn.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && state.activePreset) {
+        setActivePreset(null);
+      }
+    });
   });
 }
 
@@ -474,7 +565,9 @@ async function applyScenarioPreset(preset) {
   state.routeDirty = true;
 
   await evaluateActiveZone(false);
-  if (el("routeTab").classList.contains("active") && state.routeCodes.length > 0) {
+  const needsRouteNow = el("routeTab").classList.contains("active")
+    || (el("clearanceTab").classList.contains("active") && state.clearanceScope === "multiZone");
+  if (needsRouteNow && state.routeCodes.length > 0) {
     await analyzeRoute(false);
   }
   updateClearanceSummary();
@@ -629,7 +722,11 @@ async function evaluateActiveZone(refresh) {
     const res = await fetch(`/api/evaluate?${qs.toString()}`);
     const data = await res.json();
     if (reqId !== state.evalRequestSeq) return;
-    if (!data.success) throw new Error(data.message || "Evaluation failed.");
+    if (!data.success) {
+      const apiErr = new Error(data.message || "Evaluation failed.");
+      apiErr.errorType = data.errorType || "";
+      throw apiErr;
+    }
 
     state.lastEvalData = data;
     updateConnectionBadge(data.zone.dataSourceMode);
@@ -638,6 +735,11 @@ async function evaluateActiveZone(refresh) {
     updateClearanceSummary();
   } catch (err) {
     if (reqId !== state.evalRequestSeq) return;
+    state.lastEvalData = null;
+    state.lastRecommendedWindow = "Forecast unavailable";
+    if (err.errorType === "BmkgApiUnavailableException" && !el("simulateStormToggle").checked) {
+      updateConnectionBadge("OFFLINE_CACHE");
+    }
     const banner = el("zoneVerdictBanner");
     banner.className = "verdict-banner verdict-DO_NOT_SAIL";
     el("verdictBadge").className = "status-pill pill-DO_NOT_SAIL";
@@ -645,6 +747,18 @@ async function evaluateActiveZone(refresh) {
     el("verdictTitle").textContent = `Unable to load forecast: ${err.message}`;
     el("verdictMeta").innerHTML = `<span class="meta-chip">Check BMKG API availability or vessel input values.</span>`;
     el("verdictGaugeWrap").innerHTML = renderRiskGaugeHtml(null, "DO_NOT_SAIL", "verdictScore", "Risk Score");
+    el("verdictReasons").innerHTML = "";
+    el("metricsGrid").innerHTML = "";
+    const tzBadge = el("chartTimezoneBadge");
+    if (tzBadge) tzBadge.textContent = "Local Time";
+    const recBox = el("windowRecommendationBox");
+    recBox.className = "callout callout-danger";
+    recBox.textContent = err.errorType === "BmkgApiUnavailableException"
+      ? "BMKG forecast is unavailable offline for this zone."
+      : "24-hour window unavailable due to invalid profile parameters or forecast error.";
+    el("hourlyChart").innerHTML = "";
+    renderHourlyInspector(null, false, false);
+    updateClearanceSummary();
   } finally {
     if (reqId === state.evalRequestSeq) {
       evalBtn.disabled = false;
@@ -1079,6 +1193,8 @@ async function analyzeRoute(forceRefresh = false) {
     });
   } catch (err) {
     if (reqId !== state.routeRequestSeq) return;
+    state.lastRouteData = null;
+    grid.innerHTML = "";
     box.className = "verdict-banner verdict-DO_NOT_SAIL";
     box.classList.remove("hidden");
     el("routeStatusPill").className = "status-pill pill-DO_NOT_SAIL";
@@ -1086,6 +1202,7 @@ async function analyzeRoute(forceRefresh = false) {
     el("routeSummaryText").textContent = `Route evaluation failed: ${err.message}`;
     el("routeBottleneckMeta").textContent = "";
     el("routeGaugeWrap").innerHTML = renderRiskGaugeHtml(null, "DO_NOT_SAIL", "routePeakScore", "Bottleneck Risk");
+    updateClearanceSummary();
   } finally {
     if (reqId === state.routeRequestSeq) {
       btn.disabled = state.routeCodes.length === 0;
@@ -1133,6 +1250,8 @@ function getClearanceRecommendedWindow(targetCodes) {
 
 function getExceptionGuidance(errorType) {
   switch (errorType) {
+    case "IllegalArgumentException":
+      return "Ensure Max Crew, Crew Onboard, and active subclass specifications (tonnage, cargo, passengers, TEU) are valid positive numbers and Vessel Name is not blank.";
     case "VesselOvercapacityException":
       return "Adjust crew count, cargo tons, or passenger count in the Vessel Profile above so it does not exceed maximum vessel capacity.";
     case "MissingSafetyGearException":
@@ -1150,11 +1269,8 @@ function renderClearanceGuardrails(v, targetCodes) {
   const wrap = el("clearanceGuardrails");
   if (!wrap) return;
 
-  // 1. Capacity Check
-  const crewInvalid = v.crewCount <= 0 || v.maxCrew <= 0;
-  const crewOverloaded = v.crewCount > v.maxCrew;
-  const cargoOverloaded = v.vesselType === "BargeVessel" && v.currentCargoTon > v.maxCargoTon;
-  const paxOverloaded = v.vesselType === "PassengerFerry" && v.currentPassengers > v.maxPassengers;
+  // 1. Capacity & Profile Input Check
+  const issues = getProfileValidationIssues(v);
 
   let capStatus = "PASS";
   let capClass = "guardrail-pass";
@@ -1162,25 +1278,37 @@ function renderClearanceGuardrails(v, targetCodes) {
   let capTitle = "Capacity Gate Passed";
   let capDetail = `Crew ${v.crewCount}/${v.maxCrew} within limits.`;
 
-  if (crewInvalid) {
+  if (issues.maxCrewInvalid) {
+    capStatus = "BLOCK";
+    capClass = "guardrail-block";
+    capPillClass = "pill-block";
+    capTitle = "Invalid Max Crew";
+    capDetail = "Max Crew must be at least 1 (triggers IllegalArgumentException).";
+  } else if (issues.crewInvalid) {
     capStatus = "BLOCK";
     capClass = "guardrail-block";
     capPillClass = "pill-block";
     capTitle = "Invalid Crew Count";
-    capDetail = "Crew count must be greater than zero (triggers IllegalArgumentException).";
-  } else if (crewOverloaded) {
+    capDetail = "Crew Onboard must be at least 1 (triggers IllegalArgumentException).";
+  } else if (issues.subclassInvalidMsg) {
+    capStatus = "BLOCK";
+    capClass = "guardrail-block";
+    capPillClass = "pill-block";
+    capTitle = "Invalid Vessel Spec";
+    capDetail = issues.subclassInvalidMsg;
+  } else if (issues.crewOverloaded) {
     capStatus = "BLOCK";
     capClass = "guardrail-block";
     capPillClass = "pill-block";
     capTitle = "Crew Overcapacity";
     capDetail = `Crew count (${v.crewCount}) exceeds maximum vessel capacity (${v.maxCrew}) (triggers VesselOvercapacityException).`;
-  } else if (cargoOverloaded) {
+  } else if (issues.cargoOverloaded) {
     capStatus = "BLOCK";
     capClass = "guardrail-block";
     capPillClass = "pill-block";
     capTitle = "Cargo Overcapacity";
     capDetail = `Cargo weight (${v.currentCargoTon} t) exceeds maximum payload (${v.maxCargoTon} t) (triggers VesselOvercapacityException).`;
-  } else if (paxOverloaded) {
+  } else if (issues.paxOverloaded) {
     capStatus = "BLOCK";
     capClass = "guardrail-block";
     capPillClass = "pill-block";
@@ -1237,12 +1365,15 @@ function renderClearanceGuardrails(v, targetCodes) {
       weatherPillClass = "pill-block";
       weatherTitle = "No Route Zones";
       weatherDetail = "Add at least one sea zone in Tab 2 or switch to Current Sea Zone.";
-    } else if (state.lastRouteData) {
+    } else if (state.routeDirty || !state.lastRouteData) {
+      weatherTitle = "Updating Route Weather...";
+      weatherDetail = "Refreshing multi-zone forecast evaluation for current vessel profile.";
+    } else {
       activeConditionStatus = state.lastRouteData.overallStatus;
     }
   } else {
-    if (state.lastEvalData?.evaluation) {
-      activeConditionStatus = state.lastEvalData.evaluation.status;
+    if (state.lastEvalData?.currentEvaluation) {
+      activeConditionStatus = state.lastEvalData.currentEvaluation.status;
     }
   }
 
@@ -1391,6 +1522,7 @@ async function submitClearance() {
     }
 
     const c = data.clearance;
+    const depTz = c.departureTimezone || inferTimezoneFromLocalStamp(c.issuedTimestampLocal);
     box.innerHTML = `
       <div class="clearance-result clearance-result-APPROVED">
         <div class="clearance-result-header">
@@ -1399,7 +1531,7 @@ async function submitClearance() {
         </div>
         <div class="clearance-result-body">
           <p><strong>${escapeHtml(c.vesselName)}</strong> (${escapeHtml(c.vesselType)}) cleared for voyage along <strong>${escapeHtml((c.routeZoneCodes || []).join(" → "))}</strong>.</p>
-          <p>Status: <span class="${statusPillClass(c.safetyStatus)}">${escapeHtml(formatStatus(c.safetyStatus))}</span> &bull; Risk Score: <strong>${escapeHtml(c.riskScore)}/100</strong> &bull; Departure Timezone: <strong>${escapeHtml(c.departureTimezone || "Local")}</strong> &bull; Issued: <strong>${escapeHtml(c.issuedTimestampLocal)}</strong></p>
+          <p>Status: <span class="${statusPillClass(c.safetyStatus)}">${escapeHtml(formatStatus(c.safetyStatus))}</span> &bull; Risk Score: <strong>${escapeHtml(c.riskScore)}/100</strong> &bull; Departure Timezone: <strong>${escapeHtml(depTz)}</strong> &bull; Issued: <strong>${escapeHtml(c.issuedTimestampLocal)}</strong></p>
         </div>
       </div>
     `;

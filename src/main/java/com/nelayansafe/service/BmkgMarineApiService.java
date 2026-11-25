@@ -50,7 +50,8 @@ public class BmkgMarineApiService {
         this.cacheDir = cacheDir != null ? cacheDir : Path.of("cache");
         this.allowClasspathFallback = allowClasspathFallback;
         this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(Duration.ofSeconds(5))
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
         try {
@@ -84,8 +85,11 @@ public class BmkgMarineApiService {
                     rawJson = live;
                     mode = "LIVE_BMKG";
                     writeDiskFileSafe(diskCache, live);
+                } else {
+                    System.err.println("[BMKG] Live catalog response failed JSON validation.");
                 }
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                System.err.println("[BMKG] Live catalog fetch failed: " + e.getClass().getSimpleName() + " - " + e.getMessage());
             }
         }
 
@@ -180,8 +184,11 @@ public class BmkgMarineApiService {
                     rawJson = live;
                     mode = "LIVE_BMKG";
                     writeDiskFileSafe(diskCache, live);
+                } else {
+                    System.err.println("[BMKG] Live forecast failed JSON validation for " + safeCode);
                 }
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                System.err.println("[BMKG] Live forecast fetch failed for " + safeCode + ": " + e.getClass().getSimpleName() + " - " + e.getMessage());
             }
         }
 
@@ -434,16 +441,33 @@ public class BmkgMarineApiService {
     private String httpGet(String url) throws IOException, InterruptedException {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .timeout(Duration.ofSeconds(10))
+                .timeout(Duration.ofSeconds(8))
                 .header("Accept", "application/json")
                 .header("User-Agent", "MaritimeSafetySystem/1.0")
                 .GET()
                 .build();
-        HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        if (resp.statusCode() < 200 || resp.statusCode() >= 300 || resp.body() == null || resp.body().isBlank()) {
-            throw new IOException("BMKG HTTP status " + resp.statusCode() + " for " + url);
+
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                int status = resp.statusCode();
+                if (status >= 200 && status < 300 && resp.body() != null && !resp.body().isBlank()) {
+                    return resp.body();
+                }
+                if (status >= 400 && status < 500) {
+                    throw new IOException("BMKG HTTP status " + status + " for " + url);
+                }
+                if (attempt == 2) {
+                    throw new IOException("BMKG HTTP status " + status + " for " + url);
+                }
+            } catch (IOException e) {
+                if (attempt == 2) {
+                    throw e;
+                }
+            }
+            Thread.sleep(200);
         }
-        return resp.body();
+        throw new IOException("BMKG HTTP request failed for " + url);
     }
 
     private boolean isDiskCacheStale(Path file, long maxAgeMinutes) {

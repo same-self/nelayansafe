@@ -247,7 +247,7 @@ h2 { margin: 0 0 0.2rem 0; font-size: 1.05rem; }
 .field-inline label { white-space: nowrap; }
 .field-inline input { width: 105px; }
 
-label { font-size: 0.77rem; font-weight: 600; color: var(--muted); }
+label, .field-heading { font-size: 0.77rem; font-weight: 600; color: var(--muted); display: block; }
 
 input[type="text"], input[type="number"], select {
   background: var(--bg);
@@ -1306,10 +1306,17 @@ tr.row-active-vessel td:first-child {
 
 @media (max-width: 720px) {
   .topbar {
+    position: static;
     padding: 0.6rem 1rem;
   }
   .container {
     padding: 0 0.75rem;
+  }
+  .btn, .tab-btn, input[type="text"], input[type="number"], select {
+    min-height: 40px;
+  }
+  .btn-chip, .btn-sm {
+    min-height: 36px;
   }
   .route-builder-grid {
     grid-template-columns: 1fr;
@@ -1329,6 +1336,10 @@ tr.row-active-vessel td:first-child {
   .tab-btn {
     width: 100%;
     text-align: left;
+  }
+  .route-adder-row {
+    flex-direction: column;
+    align-items: stretch;
   }
   .scope-selector {
     flex-direction: column;

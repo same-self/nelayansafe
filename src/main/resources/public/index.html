@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Maritime Sailing Safety and Departure Window System</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230ea5e9' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='5' r='2.5'/%3E%3Cline x1='12' y1='7.5' x2='12' y2='21'/%3E%3Cpath d='M5 13H2a10 10 0 0 0 20 0h-3'/%3E%3Cline x1='8' y1='10' x2='16' y2='10'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -65,10 +66,10 @@
       <div id="vesselCollapsibleBody" class="vessel-collapsible-body">
         <div class="preset-bar">
           <span class="preset-label">Quick Demo Scenarios:</span>
-          <button type="button" class="btn-chip" data-preset="safe">Safe Fishing Boat</button>
-          <button type="button" class="btn-chip" data-preset="overcapacity">Overcapacity Test</button>
-          <button type="button" class="btn-chip" data-preset="missingGear">Missing Gear (KM Maritim Case)</button>
-          <button type="button" class="btn-chip" data-preset="storm">High-Wave Storm Test</button>
+          <button type="button" class="btn-chip" data-preset="safe" aria-pressed="false">Safe Fishing Boat</button>
+          <button type="button" class="btn-chip" data-preset="overcapacity" aria-pressed="false">Overcapacity Test</button>
+          <button type="button" class="btn-chip" data-preset="missingGear" aria-pressed="false">Missing Gear (KM Maritim Case)</button>
+          <button type="button" class="btn-chip" data-preset="storm" aria-pressed="false">High-Wave Storm Test</button>
         </div>
 
         <div class="vessel-grid">
@@ -97,8 +98,8 @@
             <label for="crewCount">Crew Onboard</label>
             <input type="number" id="crewCount" min="1" value="4" />
           </div>
-          <div class="field gear-checks" id="gearChecksField">
-            <label>Mandatory Safety Gear</label>
+          <div class="field gear-checks" id="gearChecksField" role="group" aria-labelledby="safetyGearHeading">
+            <span id="safetyGearHeading" class="field-heading">Mandatory Safety Gear</span>
             <div class="check-row">
               <label id="lifeJacketLabel"><input type="checkbox" id="hasLifeJackets" checked /> Life Jackets</label>
               <label id="radioLabel"><input type="checkbox" id="hasWorkingRadio" checked /> Marine Radio</label>
@@ -127,11 +128,11 @@
             <div class="subclass-spec-group">
               <div class="field field-inline">
                 <label for="maxCargoTon">Max Cargo (Tons)</label>
-                <input type="number" id="maxCargoTon" min="1" step="100" value="3000" />
+                <input type="number" id="maxCargoTon" min="1" step="any" value="3000" />
               </div>
               <div class="field field-inline">
                 <label for="currentCargoTon">Current Cargo (Tons)</label>
-                <input type="number" id="currentCargoTon" min="0" step="100" value="2000" />
+                <input type="number" id="currentCargoTon" min="0" step="any" value="2000" />
               </div>
             </div>
           </div>
@@ -155,7 +156,7 @@
             <div class="subclass-spec-group">
               <div class="field field-inline">
                 <label for="maxContainerTEU">Max Containers (TEU)</label>
-                <input type="number" id="maxContainerTEU" min="1" step="50" value="1200" />
+                <input type="number" id="maxContainerTEU" min="1" step="any" value="1200" />
               </div>
             </div>
           </div>
@@ -236,7 +237,7 @@
     </section>
 
     <!-- TAB 2: Multi-Zone Route Checker -->
-    <section id="routeTab" class="tab-content" role="tabpanel" aria-labelledby="tabBtnRoute">
+    <section id="routeTab" class="tab-content" role="tabpanel" aria-labelledby="tabBtnRoute" hidden>
       <div class="card">
         <div class="section-header">
           <div>
@@ -294,7 +295,7 @@
     </section>
 
     <!-- TAB 3: Harbor Clearance Gate & Trip Log -->
-    <section id="clearanceTab" class="tab-content" role="tabpanel" aria-labelledby="tabBtnClearance">
+    <section id="clearanceTab" class="tab-content" role="tabpanel" aria-labelledby="tabBtnClearance" hidden>
       <div class="card">
         <div class="section-header">
           <div>
@@ -366,7 +367,7 @@
     </section>
 
     <!-- TAB 4: Official BMKG Rules & OOP Architecture -->
-    <section id="rulesTab" class="tab-content" role="tabpanel" aria-labelledby="tabBtnRules">
+    <section id="rulesTab" class="tab-content" role="tabpanel" aria-labelledby="tabBtnRules" hidden>
       <div class="card">
         <div class="section-header">
           <div>

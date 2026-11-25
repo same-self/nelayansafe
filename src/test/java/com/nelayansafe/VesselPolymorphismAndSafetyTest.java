@@ -145,6 +145,8 @@ class VesselPolymorphismAndSafetyTest {
         assertThrows(IllegalArgumentException.class,
                 () -> Vessel.create("Submarine", "V-9", "Invalid", 5, true, true));
         assertThrows(IllegalArgumentException.class,
+                () -> Vessel.create("SmallFishingBoat", "V-0", "Boat", 0, true, true));
+        assertThrows(IllegalArgumentException.class,
                 () -> slot(-1.0, 0.5, 5.0, 0.5));
     }
 }
