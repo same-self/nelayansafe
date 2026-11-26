@@ -27,7 +27,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class BmkgMarineApiService {
     public static final String DEFAULT_BASE_URL = "https://maritim.bmkg.go.id/marine2026-data";
@@ -39,7 +38,7 @@ public class BmkgMarineApiService {
     private final String baseUrl;
     private final Path cacheDir;
     private final boolean allowClasspathFallback;
-    private final Map<String, SeaZone> indexByCode = new ConcurrentHashMap<>();
+    private volatile Map<String, SeaZone> indexByCode = Map.of();
 
     public BmkgMarineApiService() {
         this(DEFAULT_BASE_URL, Path.of("cache"), true);
@@ -89,7 +88,7 @@ public class BmkgMarineApiService {
                     System.err.println("[BMKG] Live catalog response failed JSON validation.");
                 }
             } catch (Exception e) {
-                System.err.println("[BMKG] Live catalog fetch failed: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                System.err.println("[BMKG] Live catalog fetch failed: " + formatExceptionDetail(e));
             }
         }
 
@@ -119,7 +118,7 @@ public class BmkgMarineApiService {
         JsonObject root = JsonParser.parseString(rawJson).getAsJsonObject();
         JsonArray dataArray = root.getAsJsonArray("data");
         List<ProvinceGroup> groups = new ArrayList<>();
-        indexByCode.clear();
+        Map<String, SeaZone> rebuiltIndex = new LinkedHashMap<>();
 
         for (JsonElement elem : dataArray) {
             JsonObject provObj = elem.getAsJsonObject();
@@ -134,7 +133,7 @@ public class BmkgMarineApiService {
                     if (!id.isBlank()) {
                         SeaZone z = new SeaZone(id, name, province);
                         zones.add(z);
-                        indexByCode.put(id, z);
+                        rebuiltIndex.put(id, z);
                     }
                 }
             }
@@ -142,6 +141,7 @@ public class BmkgMarineApiService {
                 groups.add(new ProvinceGroup(province, zones));
             }
         }
+        this.indexByCode = Map.copyOf(rebuiltIndex);
         return new ZoneCatalog(mode, groups);
     }
 
@@ -188,7 +188,7 @@ public class BmkgMarineApiService {
                     System.err.println("[BMKG] Live forecast failed JSON validation for " + safeCode);
                 }
             } catch (Exception e) {
-                System.err.println("[BMKG] Live forecast fetch failed for " + safeCode + ": " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                System.err.println("[BMKG] Live forecast fetch failed for " + safeCode + ": " + formatExceptionDetail(e));
             }
         }
 
@@ -511,6 +511,14 @@ public class BmkgMarineApiService {
         } catch (Exception e) {
             return utcStr;
         }
+    }
+
+    private String formatExceptionDetail(Exception e) {
+        String msg = e.getMessage();
+        if (msg == null || msg.isBlank()) {
+            return e.getClass().getSimpleName();
+        }
+        return e.getClass().getSimpleName() + " - " + msg;
     }
 
     private String getString(JsonObject obj, String key, String def) {

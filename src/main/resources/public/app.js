@@ -13,6 +13,7 @@ const state = {
   routeDirty: true,
   evalRequestSeq: 0,
   routeRequestSeq: 0,
+  evalInFlightPromise: null,
   isSubmittingClearance: false
 };
 
@@ -442,6 +443,7 @@ function bindEvents() {
     if (!code || state.routeCodes.includes(code)) return;
     state.routeCodes.push(code);
     state.routeDirty = true;
+    hideClearanceResult();
     renderRouteChips();
     updateClearanceSummary();
     analyzeRoute(false);
@@ -451,6 +453,7 @@ function bindEvents() {
     state.routeCodes = [];
     state.lastRouteData = null;
     state.routeDirty = true;
+    hideClearanceResult();
     renderRouteChips();
     renderEmptyRouteState();
     updateClearanceSummary();
@@ -718,55 +721,63 @@ async function evaluateActiveZone(refresh) {
   el("zoneVerdictBanner").classList.add("is-loading");
   el("metricsGrid").classList.add("is-loading");
 
-  try {
-    const res = await fetch(`/api/evaluate?${qs.toString()}`);
-    const data = await res.json();
-    if (reqId !== state.evalRequestSeq) return;
-    if (!data.success) {
-      const apiErr = new Error(data.message || "Evaluation failed.");
-      apiErr.errorType = data.errorType || "";
-      throw apiErr;
-    }
+  const runPromise = (async () => {
+    try {
+      const res = await fetch(`/api/evaluate?${qs.toString()}`);
+      const data = await res.json();
+      if (reqId !== state.evalRequestSeq) return;
+      if (!data.success) {
+        const apiErr = new Error(data.message || "Evaluation failed.");
+        apiErr.errorType = data.errorType || "";
+        throw apiErr;
+      }
 
-    state.lastEvalData = data;
-    updateConnectionBadge(data.zone.dataSourceMode);
-    renderZoneVerdict(data.zone, data.currentSlot, data.currentEvaluation);
-    render24HourChart(data.windowAnalysis, data.zone, data.currentSlot);
-    updateClearanceSummary();
-  } catch (err) {
-    if (reqId !== state.evalRequestSeq) return;
-    state.lastEvalData = null;
-    state.lastRecommendedWindow = "Forecast unavailable";
-    if (err.errorType === "BmkgApiUnavailableException" && !el("simulateStormToggle").checked) {
-      updateConnectionBadge("OFFLINE_CACHE");
+      state.lastEvalData = data;
+      updateConnectionBadge(data.zone.dataSourceMode);
+      renderZoneVerdict(data.zone, data.currentSlot, data.currentEvaluation);
+      render24HourChart(data.windowAnalysis, data.zone, data.currentSlot);
+      updateClearanceSummary();
+    } catch (err) {
+      if (reqId !== state.evalRequestSeq) return;
+      state.lastEvalData = null;
+      state.lastRecommendedWindow = "Forecast unavailable";
+      if (err.errorType === "BmkgApiUnavailableException" && !el("simulateStormToggle").checked) {
+        updateConnectionBadge("OFFLINE_CACHE");
+      }
+      const banner = el("zoneVerdictBanner");
+      banner.className = "verdict-banner verdict-DO_NOT_SAIL";
+      el("verdictBadge").className = "status-pill pill-DO_NOT_SAIL";
+      el("verdictBadge").textContent = "ERROR";
+      el("verdictTitle").textContent = `Unable to load forecast: ${err.message}`;
+      el("verdictMeta").innerHTML = `<span class="meta-chip">Check BMKG API availability or vessel input values.</span>`;
+      el("verdictGaugeWrap").innerHTML = renderRiskGaugeHtml(null, "DO_NOT_SAIL", "verdictScore", "Risk Score");
+      el("verdictReasons").innerHTML = "";
+      el("metricsGrid").innerHTML = "";
+      const tzBadge = el("chartTimezoneBadge");
+      if (tzBadge) tzBadge.textContent = "Local Time";
+      const recBox = el("windowRecommendationBox");
+      recBox.className = "callout callout-danger";
+      recBox.textContent = err.errorType === "BmkgApiUnavailableException"
+        ? "BMKG forecast is unavailable offline for this zone."
+        : "24-hour window unavailable due to invalid profile parameters or forecast error.";
+      el("hourlyChart").innerHTML = "";
+      renderHourlyInspector(null, false, false);
+      updateClearanceSummary();
+    } finally {
+      if (reqId === state.evalRequestSeq) {
+        evalBtn.disabled = false;
+        evalBtn.textContent = "Evaluate Sea Safety";
+        el("zoneVerdictBanner").classList.remove("is-loading");
+        el("metricsGrid").classList.remove("is-loading");
+        if (state.evalInFlightPromise === runPromise) {
+          state.evalInFlightPromise = null;
+        }
+      }
     }
-    const banner = el("zoneVerdictBanner");
-    banner.className = "verdict-banner verdict-DO_NOT_SAIL";
-    el("verdictBadge").className = "status-pill pill-DO_NOT_SAIL";
-    el("verdictBadge").textContent = "ERROR";
-    el("verdictTitle").textContent = `Unable to load forecast: ${err.message}`;
-    el("verdictMeta").innerHTML = `<span class="meta-chip">Check BMKG API availability or vessel input values.</span>`;
-    el("verdictGaugeWrap").innerHTML = renderRiskGaugeHtml(null, "DO_NOT_SAIL", "verdictScore", "Risk Score");
-    el("verdictReasons").innerHTML = "";
-    el("metricsGrid").innerHTML = "";
-    const tzBadge = el("chartTimezoneBadge");
-    if (tzBadge) tzBadge.textContent = "Local Time";
-    const recBox = el("windowRecommendationBox");
-    recBox.className = "callout callout-danger";
-    recBox.textContent = err.errorType === "BmkgApiUnavailableException"
-      ? "BMKG forecast is unavailable offline for this zone."
-      : "24-hour window unavailable due to invalid profile parameters or forecast error.";
-    el("hourlyChart").innerHTML = "";
-    renderHourlyInspector(null, false, false);
-    updateClearanceSummary();
-  } finally {
-    if (reqId === state.evalRequestSeq) {
-      evalBtn.disabled = false;
-      evalBtn.textContent = "Evaluate Sea Safety";
-      el("zoneVerdictBanner").classList.remove("is-loading");
-      el("metricsGrid").classList.remove("is-loading");
-    }
-  }
+  })();
+
+  state.evalInFlightPromise = runPromise;
+  return runPromise;
 }
 
 function updateConnectionBadge(mode) {
@@ -775,12 +786,15 @@ function updateConnectionBadge(mode) {
   if (mode === "SIMULATED_STORM") {
     badge.classList.add("badge-sim");
     badge.textContent = "HIGH-WAVE STORM SIMULATION";
+    badge.title = "High-Wave Storm Simulation active (live BMKG feed is paused for demo testing).";
   } else if (mode === "LIVE_BMKG") {
     badge.classList.add("badge-live");
     badge.textContent = "● LIVE BMKG API";
+    badge.title = "Connected to live BMKG Marine Meteorology API (38 Indonesian provinces).";
   } else {
     badge.classList.add("badge-cache");
     badge.textContent = "● OFFLINE CACHE MODE";
+    badge.title = "Offline fallback active: 3 bundled regional zones covering WIB (Aceh), WITA (Sulawesi Selatan), and WIT (Papua). Run locally for live 38-province BMKG access.";
   }
 }
 
@@ -1094,6 +1108,7 @@ function renderRouteChips() {
     removeBtn.addEventListener("click", () => {
       state.routeCodes.splice(idx, 1);
       state.routeDirty = true;
+      hideClearanceResult();
       renderRouteChips();
       updateClearanceSummary();
       if (state.routeCodes.length > 0) {
@@ -1463,8 +1478,23 @@ async function submitClearance() {
   if (state.isSubmittingClearance) return;
 
   const box = el("clearanceResultBox");
+  const btn = el("requestClearanceBtn");
+  if (state.evalInFlightPromise) {
+    state.isSubmittingClearance = true;
+    btn.disabled = true;
+    btn.textContent = "Syncing Forecast...";
+    try {
+      await state.evalInFlightPromise;
+    } catch (_) {
+    } finally {
+      state.isSubmittingClearance = false;
+    }
+  }
+
   const areaCodes = getClearanceTargetCodes();
   if (areaCodes.length === 0) {
+    btn.disabled = false;
+    btn.textContent = "Request Sailing Clearance";
     box.classList.remove("hidden");
     box.innerHTML = `
       <div class="clearance-result clearance-result-REJECTED">
@@ -1481,7 +1511,6 @@ async function submitClearance() {
   }
 
   const v = getVesselParams();
-  const btn = el("requestClearanceBtn");
   state.isSubmittingClearance = true;
   btn.disabled = true;
   btn.textContent = "Checking Guardrails...";
